@@ -1,0 +1,582 @@
+---
+author: "Arienne Calonge"
+date: "2025-07-30"
+title: "ICES NS-IBTS data availability"
+output: 
+  html_document:
+    self_contained: true
+runtime: shiny
+---
+
+Setup libraries
+```{r, echo=FALSE}
+library(tidyverse)
+library(icesDatras)
+library(icesAdvice)
+library(icesVocab)
+library(mapplots)
+library(leaflet)
+library(shiny)
+library(CoordinateCleaner)
+
+setwd("C:/Users/arienne.calonge/OneDrive - VLIZ/Ari/DEMASK/R/datras")
+```
+# CPUE per length per hour and swept area
+#############################################
+Adapted from authors: Vaishav Soni and Adriana Villamor (https://github.com/ices-tools-prod/DATRAS/blob/master/CPUE_per_length_per_hour_and_swept_area.R)
+June 2022
+Update of the procedure to take into account Gear Exception = Double Beam (DB).
+In those cases, swept area would be double
+This script mimics the SQL procedure and provides the same results.
+
+1. Harvesting data from ICES DATRAS
+
+```{r, echo=FALSE, eval=FALSE}
+
+#find species codes in icesVocab
+
+aphia_sp <- findAphia(c("Gadus morhua", "Melanogrammus aeglefinus", "Clupea harengus", "Dicentrarchus labrax", "Molva molva"), latin = TRUE)
+names(aphia_sp) <- c("Gadus morhua", "Melanogrammus aeglefinus", "Clupea harengus", "Dicentrarchus labrax", "Molva molva")
+aphia_lookup <- setNames(names(aphia_sp), aphia_sp)
+
+# Get length-based information such as measured length, individual counts, and sub-factors of sampled species
+
+    # Initialize empty list to store results
+    all_catch <- list()
+
+    # Loop through years
+    for (yr in 2000:2024) {
+      for (qtr in c(1, 3)) {
+        cat("Processing year:", yr, "quarter:", qtr, "\n")
+        result <- getHLdata(
+          survey   = 'NS-IBTS',
+          year     = yr,
+          quarter  = qtr   # pass a single quarter here
+        )
+        
+        # Store by year and quarter
+        all_catch[[paste0(yr, "_Q", qtr)]] <- result
+      }
+    }
+    
+    # Merge all data frames into one and filter species
+    HL <- do.call(rbind, all_catch) %>% filter(Valid_Aphia %in% c(126436, 126437, 126417, 126975, 126461))
+    
+    write_csv(HL, 'HL_raw_200024.csv')
+    
+# Get haul data
+    
+    # Initialize empty list to store results
+    all_catch <- list()
+
+    # Loop through years
+    for (yr in 2000:2024) {
+      for (qtr in c(1, 3)) {
+        cat("Processing year:", yr, "quarter:", qtr, "\n")
+        result <- getHHdata(
+          survey   = 'NS-IBTS',
+          year     = yr,
+          quarter  = qtr   # pass a single quarter here
+        )
+        
+        # Store by year and quarter
+        all_catch[[paste0(yr, "_Q", qtr)]] <- result
+      }
+    }
+    
+    # Merge all data frames into one
+    HH <- do.call(rbind, all_catch)
+    
+    write_csv(HH, 'HH_raw_200024.csv')
+
+# check data manually downloaded from ICES
+swept_area = read_csv("datras_downloads/swept_area/Swept Area trawl information (Flexfile)_2025-08-27 11_38_24.csv")
+swept_area[swept_area == -9] <- NA
+#colSums(is.na(swept_area))
+distinct(df, Country, Year)
+keys <- c("Country", "Year", "Day", "Month", "TimeShot", "HaulNo","HaulDur" ,"StNo", "SweepLngt", "StatRec", "SweptAreaDSKM2", "SweptAreaWSKM2", "WingSpread", "DoorSpread")
+
+swept_area <- swept_area %>% select(all_of(keys))
+
+# set negative or unrealistic values to NA (tune thresholds to your survey)
+swept_area$SweptAreaDSKM2[swept_area$SweptAreaDSKM2 < 0.05 | swept_area$SweptAreaDSKM2 > 0.7] <- NA_real_
+swept_area$SweptAreaWSKM2[swept_area$SweptAreaWSKM2 < 0.005] <- NA_real_
+swept_area$WingSpread[swept_area$WingSpread < 10 | swept_area$WingSpread > 60] <- NA_real_
+swept_area$DoorSpread[swept_area$DoorSpread < 20 | swept_area$DoorSpread > 250] <- NA_real_
+```
+
+2. Clean data and prepare variables
+```{r, echo=FALSE, eval=FALSE}
+
+# Transform LngtClass with LngtCode "1" and "5" (in cm) to mm
+
+HL<-rbind(HL%>%filter(LngtCode%in%c("1", "5"))%>%mutate(LngtClass=LngtClass*10),
+                  HL%>%filter(!LngtCode%in%c("1", "5")))
+
+colnames(HL)
+colnames(HH)
+colSums(is.na(HL)) > 0
+
+#Join the two Record Types, only Valid Hauls
+
+HH <- HH %>% select(-(RecordType)) %>% select(-(DateofCalculation))  
+HL <- HL %>% select(-(RecordType)) %>% select(-(DateofCalculation))
+
+df <- left_join(HL,HH)%>% filter(HaulVal =="V")
+#substitute -9 with NA
+df[df == -9] <- NA
+
+keys <- c("Country", "Year", "Day", "Month", "TimeShot", "HaulNo","HaulDur" ,"StNo", "SweepLngt")
+
+# extra (non-duplicate) columns from swept_area
+extra_cols <- setdiff(names(swept_area), names(df))
+
+df <- left_join(
+  df,
+  swept_area %>% select(all_of(keys), any_of(extra_cols), WingSpread, DoorSpread),
+  by = keys
+) %>%
+  mutate(
+    WingSpread = coalesce(WingSpread.x, WingSpread.y),
+    DoorSpread = coalesce(DoorSpread.x, DoorSpread.y)
+  ) %>%
+  select(-ends_with(".x"), -ends_with(".y"))
+
+colSums(is.na(df))
+
+# Beam width is the number stated in Gear, so we extract that number into a new variable Beam_width.
+# However, here Gear = GOV. GOV is an otter trawl, not a beam trawl, so width is described as Wing Spread.
+
+#For the NS‑IBTS survey using GOV gear, the general ICES-wide “Swept Area calculation algorithms” document applies—which provides country-level formulas to estimate missing WingSpread values based on DoorSpread
+
+# first let's address DoorSpread NAs
+subset_DoorSpread_NA <- df[is.na(df$DoorSpread), ]
+unique(subset_DoorSpread_NA$Country)
+
+# For the Netherlands, use a year-specific formula to estimate DoorSpread, because the IBTS gear/sensor setup changed over time
+
+df <- df %>%
+  mutate(
+    DoorSpread_est = case_when(
+      Country != "NL" ~ DoorSpread,              # leave non-NL untouched here
+      !is.na(DoorSpread) ~ DoorSpread,           # keep measured values
+      is.na(Depth) | is.na(Warplngt) ~ NA_real_, # need both for the models
+
+      Year >= 2003 & Year <= 2004 ~ 29.544*log10(Depth) + 14.116*log10(Warplngt) - 3.456,
+      Year >= 2005 & Year <= 2014 ~ 31.165*log10(Depth) + 0.2974*log10(Warplngt) + 29.321,
+      Year >= 2015 & Year <= 2016 ~ 28.947*log10(Depth) + 23.372*log10(Warplngt) - 32.476,
+      Year >= 2017                ~ 15.842*log10(Depth) + 30.868*log10(Warplngt) - 24.793,
+      TRUE ~ NA_real_
+    )
+  )
+
+# For Norway
+
+df <- df %>%
+  mutate(
+    DoorSpread_est = case_when(
+      Country != "NO" ~ DoorSpread,                     # only touch Norway here
+      !is.na(DoorSpread) ~ DoorSpread,                  # keep measured DS
+      
+      # --- Norway: G.O. Sars, Q1 (choose by sweep length) ---
+      grepl("sars", Ship, ignore.case = TRUE) & Quarter == 1 & SweepLngt <= 60 ~ 
+        111.834 - 57.178 * exp(-0.0077 * Depth),
+      grepl("sars", Ship, ignore.case = TRUE) & Quarter == 1 & SweepLngt >  60 ~ 
+        148.708 - 96.227 * exp(-0.0069 * Depth),
+
+      # --- Norway: Johan Hjort, Q3, 60 m sweeps ---
+      grepl("hjort", Ship, ignore.case = TRUE) & Quarter == 3 & SweepLngt <= 60 ~
+        97.793 - 45.739 * exp(-0.012 * Depth),
+
+      TRUE ~ NA_real_
+    )
+  )
+
+#For the rest of the countries
+
+df <- df %>%
+  mutate(
+    DoorSpread_est = case_when(
+      !is.na(DoorSpread) ~ DoorSpread,  # keep original if present
+      
+      #based on https://www.ices.dk/data/Documents/DATRAS/NS-IBTS_swept_area_km2_algorithms.pdf & https://ices-library.figshare.com/articles/report/Report_of_the_International_Bottom_Trawl_Survey_Working_Group_IBTSWG_/18614291?file=33391769
+      
+      # --- FR ---
+      Country == "FR" ~  46.965 + 0.298*Depth,
+      
+      # --- DK ---
+      Country == "DK" & SweepLngt <= 60 ~ 79.386 - 33.695 * exp(- 0.028*Depth),  # short
+      Country == "DK" & SweepLngt >  60 ~ 104.502 - 316.682 * exp(- 0.043*Depth),    # long
+      
+      # --- SE ---
+      Country == "SE" & SweepLngt <= 60 ~ 13.706*log(Depth) + 26.853,
+      Country == "SE" & SweepLngt >  60 ~ 29.489*log(Warplngt) - 67.157,
+      
+      # --- GB-SCT ---
+      #Country == "GB-SCT" ~ 0.1909*DoorSpread + 4.011, 
+      
+      # --- GB (England) ---
+      Country == "GB" ~ 15.0306*log(Depth) + 12.6399,
+      
+      # --- DE ---
+      Country == "DE" & SweepLngt <= 60 ~   -0.441 + 10.009 * log10(Warplngt) + 4.768 * log10(Depth),
+      Country == "DE" & SweepLngt >  60 ~  -7.935 + 5.123 * WingSpread + 2.366 * log(Depth) ,
+      
+      # fallback: leave as NA
+      TRUE ~ NA_real_
+    )
+  )
+
+# and now let's calculate WingSpread
+
+df$WingSpread_est = df$WingSpread
+
+df <- df %>%
+  mutate(
+    WingSpread_est = case_when(
+      !is.na(WingSpread) ~ WingSpread,  # keep original if present
+      
+      #based on https://www.ices.dk/data/Documents/DATRAS/NS-IBTS_swept_area_km2_algorithms.pdf & https://ices-library.figshare.com/articles/report/Report_of_the_International_Bottom_Trawl_Survey_Working_Group_IBTSWG_/18614291?file=33391769
+      
+      # --- NL ---
+      Country == "NL" ~ 0.1909*DoorSpread + 4.011,
+      
+      # --- FR ---
+      Country == "FR" ~ 0.161*DoorSpread + 7.45,
+      
+      # --- DK ---
+      Country == "DK" & SweepLngt <= 60 ~ 0.206*DoorSpread + 5.867,  # short
+      Country == "DK" & SweepLngt >  60 ~ 0.166*DoorSpread + 4.9,    # long
+      
+      # --- SE ---
+      Country == "SE" & SweepLngt <= 60 ~ 15.78*log(DoorSpread) - 48.248,
+      Country == "SE" & SweepLngt >  60 ~ 21.231*log(DoorSpread) - 77.605,
+      
+      # --- GB-SCT ---
+      Country == "GB-SCT" ~ 0.1909*DoorSpread + 4.011, 
+      
+      # --- GB (England) ---
+      Country == "GB" ~ 0.1869*DoorSpread + 4.011,
+      
+      # --- DE ---
+      Country == "DE" & SweepLngt <= 60 ~ 3.359 + 0.095*DoorSpread + 
+                                          1.391*log10(Warplngt) + 0.261*log10(Depth),
+      Country == "DE" & SweepLngt >  60 ~ 3.087 + 0.118*DoorSpread + 
+                                          0.445*log10(Warplngt) + 0.368*log10(Depth),
+      
+      # --- NO ---
+      Country == "NO" & SweepLngt <= 60 ~ 40.0741 + 1.9259*DoorSpread,
+      Country == "NO" & SweepLngt >  60 ~ -23.414 + 6.931*DoorSpread,
+      
+      # fallback: leave as NA
+      TRUE ~ NA_real_
+    )
+  )
+
+# remove unrealistic door spread and wing spread areas
+df$WingSpread_est[df$WingSpread_est < 10 | df$WingSpread_est > 60] <- NA_real_
+df$DoorSpread_est[df$DoorSpread_est < 20 | df$DoorSpread_est > 250] <- NA_real_
+
+# Calculate missing SweptAreas
+#IF SweptAreaWSKM2==NA, take SweptAreaDSKM2, convert everything to meters to be consistent
+df <- df %>% mutate(SweptArea = coalesce(SweptAreaWSKM2*1000000, SweptAreaDSKM2*1000000))
+
+#When distance is NA, then calculate it as 1853*HaulDur/60
+#sum(is.na(df$Distance))
+df <- transform(df, DeriveDistance = ifelse(!is.na(Distance), Distance, (1853*HaulDur)/60)) 
+
+#Calculate swept area as Distance*WingSpread_est
+df <- df %>%
+  mutate(
+    SweptArea_m2 = case_when(
+      !is.na(SweptArea) ~ SweptArea,
+      is.na(WingSpread_est) ~ as.numeric(DeriveDistance) * as.numeric(DoorSpread),
+      TRUE ~ as.numeric(DeriveDistance) * as.numeric(WingSpread_est)
+    )
+  )
+
+#check NAs 
+  #colSums(is.na(df))
+  drop_data = df %>%
+    group_by(Year, Country) %>%
+    summarise(n_missing = sum(is.na(WingSpread_est)), samples= n(), percent = n_missing/samples*100)
+
+# retain only samples with haul durations of 25 to 35 mins and average haul depth of <= 250 m and eliminate duplicated occurrences
+  range(df$HaulDur)
+  df = df %>% filter(HaulDur >= 25 & HaulDur <=35) %>% filter(Depth <= 250) %>% distinct()
+  #df <- CatchWgt_proc[!is.na(CatchWgt_proc$CatchWgt), ]
+
+# remove if haul positions missing or same as shoot position
+  df <- df[!(df$HaulLat == df$ShootLat & df$HaulLong == df$ShootLong), ]
+    
+# check if haullong and haullat are in the correct ICES statrec
+    df$CalculatedStatRec <- ices.rect2(df$HaulLong, df$HaulLat)
+    wrong_statrec <- df[df$StatRec != df$CalculatedStatRec, ]
+    df$SpeciesName <- aphia_lookup[as.character(df$Valid_Aphia)]
+    df <- df %>% filter(!is.na(Valid_Aphia))
+    
+# retain only data from 2015
+df = df %>% filter(Year >= 2015)    
+
+#outlier check - coordinates
+    df_ <- cc_outl(
+                        df,
+                        lon = "HaulLong",
+                        lat = "HaulLat",
+                        species = "SpeciesName",
+                        method = "quantile",
+                        mltpl = 1.5,
+                        value = "flagged", #TRUE = test passed and FALSE = test failed/potentially problematic
+                        sampling_thresh = 0,
+                        verbose = TRUE,
+                        min_occs = 7,
+                        thinning = FALSE
+                      )
+    
+    df_ <- ifelse(df_, "Passed", "Problematic")
+    df$outlier_coord <- df_ 
+    df <- df %>% filter(outlier_coord=="Passed")
+    
+#outlier check - statistics
+    
+    #create unique Row ID
+    df$RowID <- 1:nrow(df)
+    
+    # Function to detect outliers within each species group
+    detect_outliers_iqr <- function(df) {
+      Q1 <- quantile(df$HLNoAtLngt, 0.25, na.rm = TRUE)
+      Q3 <- quantile(df$HLNoAtLngt, 0.75, na.rm = TRUE)
+      IQR_val <- Q3 - Q1
+      lower_bound <- Q1 - 1.5 * IQR_val
+      upper_bound <- Q3 + 1.5 * IQR_val
+      df %>% filter(HLNoAtLngt < lower_bound | HLNoAtLngt > upper_bound)
+    }
+    
+    # Apply function to each species (grouped by Valid_Aphia)
+    outliers_per_species_per_haul <- df %>%
+      group_by(Country, Year, Month, Day, HaulNo, StNo,Valid_Aphia, LngtClass) %>%
+      group_modify(~ detect_outliers_iqr(.x))%>%
+      select(RowID, Country, Year, Month, Day, HaulNo, StNo, Valid_Aphia, LngtClass) %>%
+      mutate(is_outlier = TRUE)
+
+    # Flag outliers in the original dataframe
+    df <- df %>%
+        left_join(outliers_per_species_per_haul %>% mutate(is_outlier = TRUE),
+                  by = c("RowID", "Country", "Year", "Month", "Day", "HaulNo", "StNo", "Valid_Aphia", "LngtClass")) %>%
+        mutate(is_outlier = ifelse(is.na(is_outlier), FALSE, is_outlier))
+    
+save(df, file ="df.RData")
+```
+
+
+3. Calculate CPUE number per square kilometer
+```{r, echo=FALSE, eval=FALSE}
+
+#load dataframe and remove statistical outliers
+df <- load("df.RData") %>% filter(is_outlier==FALSE)
+
+#Multiply the swept area when there is a double beam
+
+df <- mutate(df, SweptArea_m2bis = ifelse(GearEx != "DB", NA, (SweptArea_m2*2)))
+df <- mutate(df,SweptArea_m2 = ifelse(!is.na(SweptArea_m2bis), SweptArea_m2bis,SweptArea_m2))
+
+#Remove the temporal variable
+df <- df[, -87]
+
+#To kilometers 
+df <- df %>% mutate(SweptArea_km2 = SweptArea_m2/1000000)
+
+#Substitute NA in SubFactor with 1, for next multiplications
+df$SubFactor[is.na(df$SubFactor)] <- 1
+
+#For DataType R or S, Transform HLNoAtLngt as follows:
+df1 <- df%>% filter(DataType %in% c("S", "R"))%>% mutate(NoPerHaul=HLNoAtLngt*60/HaulDur)
+
+#For DataType C, HLNoAtLngt remains the same
+df2 <- df%>% filter(DataType == "C")%>% mutate(NoPerHaul=HLNoAtLngt)
+
+#Merge these two dataframes
+df <- rbind(df1,df2)
+
+#CPUE_numbers_per_hour
+df <- transform(df, CPUE_number_per_hour = ifelse(!is.na(NoPerHaul), NoPerHaul * SubFactor, 0))
+
+#CPUE_number_per_km2
+df <- df %>% mutate(CPUE_number_per_km2 = (HLNoAtLngt * SubFactor)/SweptArea_km2)
+
+colSums(is.na(df))
+min(df$CPUE_number_per_km2)
+
+write_csv(df, 'CPUE_km2_2015_2024.csv')
+
+save(df, file = "CPUE_km2_2015_2024.RData")
+```
+
+Load cleaned data from 2015 - geographical outliers & statistical outliers based on the IQR of HaulNoAtLngt per LngtClass were removed
+```{r, echo=FALSE}
+load("CPUE_km2_2015_2024.RData")
+```
+
+Plot available data
+```{r plot}
+    # check completeness of data per species
+    
+    #summary_data = df %>% group_by(Valid_Aphia, Year, Quarter) %>% summarize(NoHauls = n())
+    quarter_coverage <- df %>%
+      distinct(Valid_Aphia, Year, Quarter) %>%
+      group_by(Valid_Aphia, Year) %>%
+      summarize(QuartersPresent = n(), .groups = "drop")
+    
+    quarter_coverage <- quarter_coverage %>%
+      mutate(Coverage = case_when(
+        QuartersPresent == 2 ~ "Both",
+        QuartersPresent == 1 ~ "One",
+        TRUE ~ "None"
+      ))
+    
+    # Get full species-year grid
+    full_grid <- expand.grid(
+      Valid_Aphia = unique(df$Valid_Aphia),
+      Year = unique(df$Year)
+    )
+    
+    # Join to add missing combinations as NA
+    coverage_full <- full_grid %>%
+      left_join(quarter_coverage, by = c("Valid_Aphia", "Year")) %>%
+      mutate(Coverage = ifelse(is.na(Coverage), "None", Coverage))
+    
+    ggplot(coverage_full, aes(x = as.factor(Year), y = as.factor(Valid_Aphia), fill = Coverage)) +
+      geom_tile(color = "white") +
+      scale_fill_manual(values = c("None" = "gray90", "One" = "orange", "Both" = "steelblue")) +
+      labs(
+        title = "Quarter 1 & 3 Coverage by Species and Year",
+        x = "Year",
+        y = "Species (Valid_Aphia)",
+        fill = "Coverage"
+      ) +
+      theme_minimal() +
+      theme(axis.text.y = element_text(size = 8))
+    
+```
+
+```{r, echo=FALSE}
+    
+    # Plot number of individual species over time per km2
+    
+    df$Date <- as.Date(
+      paste0(df$Year, "-", sprintf("%02d", df$Month),"-", df$Day),
+      format = "%Y-%m-%d"
+    )
+
+    ggplot(df, aes(x = Date, y = CPUE_number_per_km2, color = SpeciesName)) +
+      geom_point(alpha = 0.6) +
+      labs(title = "CPUE ",
+           x = "Date",
+           y = "CPUE (individuals/km2)") +
+      theme_minimal()
+          
+```
+
+## 3. Map occurrences 
+Remove shoot/haul positions outside North Sea range -> not done! 
+
+```{r, echo=FALSE}
+message("Total no. of sampling points:",nrow(df))
+message("No. of geographical outliers: ", 62) #sum(df_ == "Problematic", na.rm = TRUE)
+message("No. of statistical outliers: ", sum(df$is_outlier == "TRUE", na.rm = TRUE))
+```
+
+Cod
+```{r, echo=FALSE}
+# Get unique species names
+species_list <- unique(df$SpeciesName)
+
+leaflet(data = df %>% filter(SpeciesName==species_list[1])) %>%
+  addTiles() %>%
+  addCircleMarkers(
+    lng = ~HaulLong,
+    lat = ~HaulLat,
+    radius = 2,
+    color = "blue"
+  )
+```
+
+Haddock
+```{r, echo=FALSE}
+# Get unique species names
+species_list <- unique(df$SpeciesName)
+
+leaflet(data = df %>% filter(SpeciesName==species_list[2])) %>%
+  addTiles() %>%
+  addCircleMarkers(
+    lng = ~HaulLong,
+    lat = ~HaulLat,
+    radius = 2,
+    color = "blue"
+  )
+```
+
+European seabass
+```{r, echo=FALSE}
+# Get unique species names
+species_list <- unique(df$SpeciesName)
+
+leaflet(data = df %>% filter(SpeciesName==species_list[3])) %>%
+  addTiles() %>%
+  addCircleMarkers(
+    lng = ~HaulLong,
+    lat = ~HaulLat,
+    radius = 2,
+    color = "blue"
+  )
+```
+
+Ling
+```{r, echo=FALSE}
+# Get unique species names
+species_list <- unique(df$SpeciesName)
+
+leaflet(data = df %>% filter(SpeciesName==species_list[4])) %>%
+  addTiles() %>%
+  addCircleMarkers(
+    lng = ~HaulLong,
+    lat = ~HaulLat,
+    radius = 2,
+    color = "blue"
+  )
+```
+
+Herring
+```{r, echo=FALSE}
+# Get unique species names
+species_list <- unique(df$SpeciesName)
+
+leaflet(data = df %>% filter(SpeciesName==species_list[5])) %>%
+  addTiles() %>%
+  addCircleMarkers(
+    lng = ~HaulLong,
+    lat = ~HaulLat,
+    radius = 2,
+    color = "blue"
+  )
+```
+
+Map statistical outliers based on IQR
+```{r, echo=FALSE, eval=FALSE}
+outliers_map_data <- df %>%
+  filter(is_outlier == TRUE, !is.na(HaulLat), !is.na(HaulLong))
+
+# Create the leaflet map
+leaflet(data = outliers_map_data) %>%
+  addTiles() %>%
+  addCircleMarkers(
+    lng = ~HaulLong,
+    lat = ~HaulLat,
+    radius = 5,
+    color = "red",
+    stroke = FALSE,
+    fillOpacity = 0.8,
+    popup = ~paste("Species:", SpeciesName, "<br>",
+                   "Catch Weight:", CatchWgt, "kg")
+  )
+```
