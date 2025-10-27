@@ -1,0 +1,333 @@
+---
+author: "Arienne Calonge"
+date: "2025-07-30"
+title: "ICES NS-IBTS data availability"
+output: 
+  html_document:
+    self_contained: true
+runtime: shiny
+---
+
+## Harvesting data from ICES DATRAS
+Setup libraries
+```{r, echo=FALSE}
+library(tidyverse)
+library(icesDatras)
+library(icesAdvice)
+library(icesVocab)
+library(mapplots)
+library(leaflet)
+library(shiny)
+library(CoordinateCleaner)
+
+setwd("C:/Users/arienne.calonge/OneDrive - VLIZ/Ari/DEMASK/R/datras")
+```
+
+## 1. Harvest data
+```{r, echo=FALSE, eval=FALSE}
+#find species codes in icesVocab
+
+aphia_sp <- findAphia(c("Gadus morhua", "Melanogrammus aeglefinus", "Clupea harengus", "Dicentrarchus labrax", "Molva molva"), latin = TRUE)
+
+names(aphia_sp) <- c("Gadus morhua", "Melanogrammus aeglefinus", "Clupea harengus", "Dicentrarchus labrax", "Molva molva")
+aphia_lookup <- setNames(names(aphia_sp), aphia_sp)
+
+#check availability of data from ICES DATRAS
+
+    getDatrasDataOverview(surveys = 'NS-IBTS', long = TRUE)
+    
+    # Initialize empty list to store results
+    all_catch <- list()
+    
+    # Loop through years
+    for (yr in 2000:2024) {
+      cat("Processing year:", yr, "\n")
+      result <- getCatchWgt(
+        survey = 'NS-IBTS',
+        years = yr,
+        quarters = c(1,3),
+        aphia = c(126436, 126437, 126417, 126975, 126461)
+      )
+      all_catch[[as.character(yr)]] <- result
+      print(yr)
+    }
+    
+    # Merge all data frames into one
+    CatchWgt <- do.call(rbind, all_catch)
+    
+    write_csv(CatchWgt, 'CatchWeight_200024.csv')
+
+# Get length-based information such as measured length, individual counts, and sub-factors of sampled species
+
+    HL = getHLdata(survey= 'NS-IBTS', year = 2023:2024, quarter = 1:4)
+
+# adult and larvae?
+```
+
+## 2. Clean data 
+```{r, echo=FALSE, eval=FALSE}
+    colnames(CatchWgt)
+    colSums(is.na(CatchWgt)) > 0
+    
+    # explore columns that are NA
+    subset_NA <- CatchWgt[is.na(CatchWgt$HaulDUr), ]
+    
+    # retain only samples with haul durations of 25 to 35 mins and average haul depth of <= 250 m and eliminate duplicated occurrences
+    range(CatchWgt$HaulDur)
+    CatchWgt_proc = CatchWgt %>% filter(HaulDur >= 25 & HaulDur <=35) %>% filter(Depth <= 250) %>% distinct()
+    CatchWgt_proc <- CatchWgt_proc[!is.na(CatchWgt_proc$CatchWgt), ]
+    
+    # remove if haul positions missing or same as shoot position
+    CatchWgt_proc <- CatchWgt_proc[!(CatchWgt_proc$HaulLat == CatchWgt_proc$ShootLat & CatchWgt_proc$HaulLong == CatchWgt_proc$ShootLong), ]
+    
+    # check if haullong and haullat are in the correct ICES statrec
+    CatchWgt_proc$CalculatedStatRec <- ices.rect2(CatchWgt_proc$HaulLong, CatchWgt_proc$HaulLat)
+    wrong_statrec <- CatchWgt_proc[CatchWgt_proc$StatRec != CatchWgt_proc$CalculatedStatRec, ]
+    
+    CatchWgt_proc <- CatchWgt_proc[CatchWgt_proc$StatRec == CatchWgt_proc$CalculatedStatRec, ]
+    
+    CatchWgt_proc <- CatchWgt_proc[rowSums(is.na(CatchWgt_proc)) != ncol(CatchWgt_proc), ]
+    
+    CatchWgt_proc$SpeciesName <- aphia_lookup[as.character(CatchWgt_proc$Valid_Aphia)]
+    
+    #outlier check - coordinates
+    CatchWgt_proc_ <- cc_outl(
+                        CatchWgt_proc,
+                        lon = "HaulLong",
+                        lat = "HaulLat",
+                        species = "SpeciesName",
+                        method = "quantile",
+                        mltpl = 1.5,
+                        value = "flagged", #TRUE = test passed and FALSE = test failed/potentially problematic
+                        sampling_thresh = 0,
+                        verbose = TRUE,
+                        min_occs = 7,
+                        thinning = FALSE
+                      )
+    
+    CatchWgt_proc_ <- ifelse(CatchWgt_proc_, "Passed", "Problematic")
+    CatchWgt_proc$outlier_coord <- CatchWgt_proc_ 
+    CatchWgt_proc <- CatchWgt_proc %>% filter(outlier_coord=="Passed")
+    
+    #outlier check - statistics
+    
+    #create unique Row ID
+    CatchWgt_proc$RowID <- 1:nrow(CatchWgt_proc)
+    
+    # Function to detect outliers within each species group
+    detect_outliers_iqr <- function(CatchWgt_proc) {
+      Q1 <- quantile(CatchWgt_proc$CatchWgt, 0.25, na.rm = TRUE)
+      Q3 <- quantile(CatchWgt_proc$CatchWgt, 0.75, na.rm = TRUE)
+      IQR_val <- Q3 - Q1
+      lower_bound <- Q1 - 1.5 * IQR_val
+      upper_bound <- Q3 + 1.5 * IQR_val
+      CatchWgt_proc %>% filter(CatchWgt < lower_bound | CatchWgt > upper_bound)
+    }
+    
+    # Apply function to each species (grouped by Valid_Aphia)
+    outliers_per_species <- CatchWgt_proc %>%
+      group_by(Valid_Aphia) %>%
+      group_modify(~ detect_outliers_iqr(.x))%>%
+      select(RowID, Valid_Aphia, CatchWgt) %>%
+      mutate(is_outlier = TRUE)
+
+    # Flag outliers in the original dataframe
+    CatchWgt_proc <- CatchWgt_proc %>%
+        left_join(outliers_per_species %>% mutate(is_outlier = TRUE),
+                  by = c("RowID", "Valid_Aphia", "CatchWgt")) %>%
+        mutate(is_outlier = ifelse(is.na(is_outlier), FALSE, is_outlier))
+    
+    write_csv(CatchWgt_proc, 'CatchWeight_200024_proc.csv')
+
+    save(CatchWgt_proc, file = "CatchWgt_proc.RData")
+```
+
+#Load cleaned data from 2015 - geographical outliers were removed, but statistical outliers (IQR) were only flagged in CatchWgt_proc.RData
+```{r}
+load("CatchWgt_proc.RData")
+
+CatchWgt_proc = CatchWgt_proc %>% filter(Year >= 2015)
+```
+
+#Plot available data
+```{r plot, echo=FALSE}
+    # check completeness of data per species
+    
+    summary_data = CatchWgt_proc %>% group_by(Valid_Aphia, Year, Quarter) %>% summarize(NoHauls = n())
+    
+    quarter_coverage <- CatchWgt_proc %>%
+      distinct(Valid_Aphia, Year, Quarter) %>%
+      group_by(Valid_Aphia, Year) %>%
+      summarize(QuartersPresent = n(), .groups = "drop")
+    
+    quarter_coverage <- quarter_coverage %>%
+      mutate(Coverage = case_when(
+        QuartersPresent == 2 ~ "Both",
+        QuartersPresent == 1 ~ "One",
+        TRUE ~ "None"
+      ))
+    
+    # Get full species-year grid
+    full_grid <- expand.grid(
+      Valid_Aphia = unique(CatchWgt_proc$Valid_Aphia),
+      Year = unique(CatchWgt_proc$Year)
+    )
+    
+    # Join to add missing combinations as NA
+    coverage_full <- full_grid %>%
+      left_join(quarter_coverage, by = c("Valid_Aphia", "Year")) %>%
+      mutate(Coverage = ifelse(is.na(Coverage), "None", Coverage))
+    
+    ggplot(coverage_full, aes(x = Year, y = as.factor(Valid_Aphia), fill = Coverage)) +
+      geom_tile(color = "white") +
+      scale_fill_manual(values = c("None" = "gray90", "One" = "orange", "Both" = "steelblue")) +
+      labs(
+        title = "Quarter 1 & 3 Coverage by Species and Year",
+        x = "Year",
+        y = "Species (Valid_Aphia)",
+        fill = "Coverage"
+      ) +
+      theme_minimal() +
+      theme(axis.text.y = element_text(size = 8))
+    
+```
+
+```{r, echo=FALSE}
+    
+    # Plot catch weight per species over time
+    
+    CatchWgt_proc$Date <- as.Date(
+      paste0(CatchWgt_proc$Year, "-", sprintf("%02d", CatchWgt_proc$Month),"-", CatchWgt_proc$Day),
+      format = "%Y-%m-%d"
+    )
+
+    ggplot(CatchWgt_proc, aes(x = Date, y = CatchWgt, color = SpeciesName)) +
+      geom_point(alpha = 0.6) +
+      labs(title = "Catch Weight (kg)",
+           x = "Date",
+           y = "Catch Weight") +
+      theme_minimal()
+    
+    # Plot with outliers
+    ggplot(CatchWgt_proc, aes(x = Date, y = CatchWgt, color = SpeciesName)) +
+      geom_point(aes(shape = is_outlier), alpha = 0.6, size = 2) +  # Shape by outlier label
+      labs(title = "Catch Weight (kg)",
+           x = "Time",
+           y = "Catch Weight",
+           shape = "Outlier Status") +
+      theme_minimal()
+          
+```
+
+## 3. Map occurrences 
+Remove shoot/haul positions outside North Sea range -> not done! 
+
+```{r, echo=FALSE}
+message("Total no. of sampling points:",nrow(CatchWgt_proc))
+message("No. of geographical outliers: ", 230) #sum(CatchWgt_proc_ == "Problematic", na.rm = TRUE)
+message("No. of statistical outliers: ", sum(CatchWgt_proc$is_outlier == "TRUE", na.rm = TRUE))
+```
+
+```{r ui, echo=FALSE}
+selectInput("SpeciesName", "Select species:", choices = unique(CatchWgt_proc$SpeciesName))
+
+leafletOutput("map", height = 500)
+```
+
+```{r map, echo=FALSE}
+output$map <- renderLeaflet({
+  req(input$SpeciesName)
+
+  filtered <- CatchWgt_proc %>%
+    filter(SpeciesName == input$SpeciesName)
+
+  leaflet(data = filtered) %>%
+    addTiles() %>%
+    addCircleMarkers(
+      lng = ~HaulLong, lat = ~HaulLat,  # double-check if column is HaulLon or HaulLong
+      popup = ~paste("Species:", SpeciesName),
+      radius = 5,
+      color = "blue"
+    )
+})
+```
+
+Static maps per species: Haddock
+```{r, echo=FALSE}
+# Get unique species names
+species_list <- unique(CatchWgt_proc$SpeciesName)
+
+leaflet(data = CatchWgt_proc %>% filter(SpeciesName==species_list[1])) %>%
+  addTiles() %>%
+  addCircleMarkers(
+    lng = ~HaulLong,
+    lat = ~HaulLat,
+    radius = 2,
+    color = "blue"
+  )
+```
+
+Static maps per species: Cod
+```{r, echo=FALSE}
+# Get unique species names
+species_list <- unique(CatchWgt_proc$SpeciesName)
+
+leaflet(data = CatchWgt_proc %>% filter(SpeciesName==species_list[3])) %>%
+  addTiles() %>%
+  addCircleMarkers(
+    lng = ~HaulLong,
+    lat = ~HaulLat,
+    radius = 2,
+    color = "blue"
+  )
+```
+
+Static maps per species: Ling
+```{r, echo=FALSE}
+# Get unique species names
+species_list <- unique(CatchWgt_proc$SpeciesName)
+
+leaflet(data = CatchWgt_proc %>% filter(SpeciesName==species_list[4])) %>%
+  addTiles() %>%
+  addCircleMarkers(
+    lng = ~HaulLong,
+    lat = ~HaulLat,
+    radius = 2,
+    color = "blue"
+  )
+```
+
+Static maps per species: European seabass
+```{r, echo=FALSE}
+# Get unique species names
+species_list <- unique(CatchWgt_proc$SpeciesName)
+
+leaflet(data = CatchWgt_proc %>% filter(SpeciesName==species_list[5])) %>%
+  addTiles() %>%
+  addCircleMarkers(
+    lng = ~HaulLong,
+    lat = ~HaulLat,
+    radius = 2,
+    color = "blue"
+  )
+```
+
+Map statistical outliers based on IQR
+```{r, echo=FALSE}
+outliers_map_data <- CatchWgt_proc %>%
+  filter(is_outlier == TRUE, !is.na(HaulLat), !is.na(HaulLong))
+
+# Create the leaflet map
+leaflet(data = outliers_map_data) %>%
+  addTiles() %>%
+  addCircleMarkers(
+    lng = ~HaulLong,
+    lat = ~HaulLat,
+    radius = 5,
+    color = "red",
+    stroke = FALSE,
+    fillOpacity = 0.8,
+    popup = ~paste("Species:", SpeciesName, "<br>",
+                   "Catch Weight:", CatchWgt, "kg")
+  )
+```
