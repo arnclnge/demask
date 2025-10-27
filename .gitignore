@@ -5,5 +5,5 @@
 .nc
 /results
 /figures
-/acoustic
+data/acoustic
 .csv
