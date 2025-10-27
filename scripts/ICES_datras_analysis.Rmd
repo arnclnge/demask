@@ -1,0 +1,474 @@
+---
+author: "Jo-Hannes Nowé"
+date: "2025-08-28"
+title: "ICES datras analysis"
+output: 
+  html_document:
+    self_contained: true
+runtime: shiny
+---
+
+## Harvesting data from ICES DATRAS
+
+Setup libraries
+
+```{r, echo=FALSE}
+library(sf)
+library(ggplot2)
+library(terra)
+library(tidyverse)
+library(cmocean)
+```
+```{r}
+#Setup directories
+ifelse(!dir.exists("figures"), dir.create("figures"), FALSE)
+```
+
+
+## 1. Load data
+
+```{r}
+#CatchWgt_proc
+load("CatchWgt_proc.RData")
+head(CatchWgt_proc)
+#First try out for Cod
+species <- "Gadus morhua"
+CatchWgt_proc <- CatchWgt_proc %>%
+  dplyr::filter(SpeciesName == species)
+```
+
+For the moment we will work with the Catchweight. Arienne is now turning that into Catch per Unit Effort per swept area.
+
+## Making the grid cells
+
+### Download the study area (North Sea)
+
+See code chunk we had to download the ospar data.
+
+```{r}
+load_ospar <- function(regions=c("I","II","III","IV","V"), filepath){
+  if(!file.exists(filepath)){
+    url <- "https://odims.ospar.org/public/submissions/ospar_regions/regions/2017-01/002/ospar_regions_2017_01_002-gis.zip"
+    download.file(url,file.path(dirname(filepath),"ospar_REGIONS.zip"),mode="wb")
+    unzip(zipfile=file.path(dirname(filepath),"ospar_REGIONS.zip"),exdir=dirname(filepath))
+  }
+  ospar_regions <- st_read(filepath)
+  #Subsetting to regions of interest
+  study_area <- ospar_regions[ospar_regions$Region %in% regions,]
+  study_area <- sf::st_make_valid(study_area)%>%st_union()
+  return(study_area)
+}
+```
+
+```{r}
+north_sea <- load_ospar(regions = "II", #OSPAR region II is the Greater North Sea
+           filepath = "study_area/ospar_regions_2017_01_002.shp")
+ggplot(north_sea)+
+  geom_sf()
+```
+
+### Turn the study area into a raster with grid cells
+
+We first run the methodology for a coarser grid to more clearly show the different
+steps. Later we perform the analysis for the 10x10km grid.
+
+```{r}
+#Turn the shapefile into spatVector to be able to use the terra package
+north_sea_vect <- terra::vect(north_sea)
+terra::plot(north_sea_vect)
+
+#Turn the spatVector into a raster
+r <- terra::rast(north_sea_vect,
+                 resolution = 0.12, #Corresponds roughly to 10x10km
+                 vals = 1)%>%
+  terra::mask(north_sea_vect)
+
+#Mockup example with coarser resolution to show methodology
+r <- terra::rast(north_sea_vect,
+                 resolution = 1, #Corresponds roughly to 10x10km
+                 vals = 1)%>%
+  terra::mask(north_sea_vect)
+
+```
+
+### Plot the rasters
+
+```{r}
+outlines <- mean(r) %>% as.polygons(dissolve = FALSE)
+
+png(file.path("figures","grid_coarse.png"), width = 1200, height = 1800, res = 300)
+terra::plot(north_sea_vect)
+terra::plot(outlines, add = TRUE)
+dev.off()
+```
+
+See code chunk we had from plotting the raster with the grid cell lines.
+
+## Keep grid cells with data in at least \>90% of the years
+
+### Turn the dataframe into spatial points
+
+The spatial points should have geometry, speciesName, Catchwgt, year, month
+
+```{r}
+catch_all <- CatchWgt_proc %>%
+  dplyr::select(Latitude = ShootLat, #Take this or HaulLat? Or mean of these?
+                Longitude = ShootLong,
+                Year, Month, SpeciesName, CatchWgt)%>%
+  dplyr::mutate(quarter = lubridate::quarter(Month))
+
+#First try it for one quarter and year
+q = 1
+y = 2000
+catch <- catch_all%>%
+  dplyr::filter(quarter == q,
+                Year == y)
+catch_sf <- st_as_sf(catch, coords = c("Longitude", "Latitude"), crs = "EPSG:4326")
+
+png(file.path("figures","sampling_coarse.png"), width = 1200, height = 1800, res = 300)
+ggplot(catch_sf)+
+  geom_sf(data = north_sea)+
+  geom_sf()+
+  labs(title = "Catch weight sampling points",
+       subtitle = paste0(species," Year: ",y,", Q",q))
+dev.off()
+```
+
+### Turn the spatial points into yearly rasters
+
+We will do this first manually for a coarser resolution and one quarter-year combination to show the methodology with plots.
+
+```{r}
+# Setup color scheme using the cmocean package
+algae <- cmocean("algae")
+pal <- algae(15)
+```
+
+```{r}
+#Get the coordinates of the center of each grid cell
+cells_not_na <- cells(r)
+center_grid <- xyFromCell(r, cells_not_na)
+
+#Create a SpatVector from these center points
+center_grid <- terra::vect(center_grid, crs = "EPSG:4326")
+
+#Plot the center points in the study area
+png(file.path("figures","center_grid_coarse.png"), width = 1200, height = 1800, res = 300)
+ggplot(data = st_as_sf(center_grid))+
+  geom_sf(data = north_sea) +
+  geom_sf()+
+  labs(title = "Center of grid cells")
+dev.off()
+
+#Transform to projected crs so we can take the buffer in km instead of degrees
+center_grid_proj <- terra::project(center_grid, "EPSG:25832")
+
+#Draw a buffer around the centers of 65km
+center_buffer <- terra::buffer(center_grid_proj, width = 65000)
+#Project back to same CRS as catchweight points
+center_buffer <- terra::project(center_buffer, "EPSG:4326")
+#Turn into sf object for easier spatial operations
+center_buffer <- st_as_sf(center_buffer)
+
+#Plot the buffers in the study area
+png(file.path("figures","buffer_grid_coarse.png"), width = 1200, height = 1800, res = 300)
+ggplot(center_buffer)+
+  geom_sf(data = north_sea)+
+  geom_sf(alpha = 0.1)+
+  geom_sf(data = st_as_sf(center_grid))+
+  labs(title = "Buffer of grid cells")
+dev.off()
+
+#Plot the sampling points in the buffers
+png(file.path("figures","buffer_points_coarse.png"), width = 1800, height = 1800, res = 300)
+ggplot(center_buffer)+
+  geom_sf(data = north_sea)+
+  geom_sf(alpha = 0.1)+
+  geom_sf(data = st_as_sf(center_grid), aes(colour = "Grid center"))+
+  geom_sf(data = catch_sf, aes(colour = "Sampling point")) +
+  scale_color_manual(
+    values = c("Grid center" = "black", "Sampling point" = "red"),
+    name = "Points")+
+  labs(title = "Buffer with sampling points",
+       subtitle = paste0(species," Year: ",y,", Q",q))
+dev.off()
+
+#Check which points intersect with which polygons of buffers
+contains_list <- st_contains(center_buffer, catch_sf)
+#Calculate the value of each grid cell as the mean of values around the center
+mean_catch <- sapply(contains_list, function(idx) {
+  if (length(idx) == 0) {
+    return(NA)  # no points in this buffer
+  } else {
+    mean(catch_sf$CatchWgt[idx], na.rm = TRUE)
+  }
+})
+
+#Each buffer now contains the mean catch value
+center_buffer$mean_catch <- mean_catch
+#Plot the value of each buffer
+png(file.path("figures","buffer_values_coarse.png"), width = 1800, height = 1800, res = 300)
+ggplot(data = center_buffer, alpha = 0.01)+
+  geom_sf(aes(fill = mean_catch))+
+  geom_sf(data = north_sea, fill = NA)+
+  scale_fill_gradientn(colours = pal, na.value = "transparent")+
+  geom_sf(data = st_as_sf(center_grid))+
+  labs(title = "Buffer with calculated mean catch",
+       subtitle = paste0(species," Year: ",y,", Q",q))
+dev.off()
+
+#Give each center of the grid cells this value for easier rasterizing
+center_grid$mean_catch <- mean_catch
+
+#Also plot the center of each of the grid cells with their value
+png(file.path("figures","center_values_coarse.png"), width = 1800, height = 1800, res = 300)
+ggplot(data = st_as_sf(center_grid), alpha = 0.01)+
+  geom_sf(aes(colour = mean_catch))+
+  geom_sf(data = north_sea, fill = NA)+
+  scale_color_gradientn(colours = pal, na.value = "transparent")+
+  labs(title = "Center grid cell with calculated mean catch",
+       subtitle = paste0(species," Year: ",y,", Q",q))
+dev.off()
+
+#Rasterize mean catchweight
+r_mean <- rasterize(x = center_grid,
+                    y = r, #grid of pre-defined resolution within Greater North Sea
+                    field = "mean_catch",
+                    fun = "first")
+
+#Plot the raster
+r_mean_df <- as.data.frame(r_mean, xy = TRUE) %>%
+  rename(mean_catch = 3)
+png(file.path("figures","raster_coarse.png"), width = 1800, height = 1800, res = 300)
+ggplot() +
+  geom_raster(data = r_mean_df, aes(x = x, y = y, fill = mean_catch))+
+  geom_sf(data = north_sea, fill = NA)+
+  scale_fill_gradientn(colours = pal, na.value = "transparent")+
+  labs(title = "Raster with calculated mean catch",
+       subtitle = paste0(species," Year: ",y,", Q",q),
+       x = NULL, y = NULL)
+dev.off()
+```
+
+We make a function to loop over every quarter-year-species combination.
+
+```{r raster_function}
+calculate_mean <- function(r, catch_sf){
+#Get the coordinates of the center of each grid cell
+cells_not_na <- cells(r)
+center_grid <- xyFromCell(r, cells_not_na)
+
+#Create a SpatVector from these center points
+center_grid <- terra::vect(center_grid, crs = "EPSG:4326")
+
+#Transform to projected crs so we can take the buffer in km instead of degrees
+center_grid_proj <- terra::project(center_grid, "EPSG:25832")
+
+#Draw a buffer around the centers of 65km
+center_buffer <- terra::buffer(center_grid_proj, width = 65000)
+#Project back to same CRS as catchweight points
+center_buffer <- terra::project(center_buffer, "EPSG:4326")
+#Turn into sf object for easier spatial operations
+center_buffer <- st_as_sf(center_buffer)
+
+#Check which points intersect with which polygons of buffers
+contains_list <- st_contains(center_buffer, catch_sf)
+#Calculate the value of each grid cell as the mean of values around the center
+mean_catch <- sapply(contains_list, function(idx) {
+  if (length(idx) == 0) {
+    return(NA)  # no points in this buffer
+  } else {
+    mean(catch_sf$CatchWgt[idx], na.rm = TRUE)
+  }
+})
+
+#Each buffer now contains the mean catch value
+center_buffer$mean_catch <- mean_catch
+
+#Give each center of the grid cells this value for easier rasterizing
+center_grid$mean_catch <- mean_catch
+
+#Rasterize mean catchweight
+r_mean <- rasterize(x = center_grid,
+                    y = r, #grid of pre-defined resolution within Greater North Sea
+                    field = "mean_catch",
+                    fun = "first")
+return(r_mean)
+}
+```
+
+We make a spatraster where each layer is a different quarter-year combination.
+
+```{r}
+#We choose a finer raster now to fit the project needs of 10x10km
+r <- terra::rast(north_sea_vect,
+                 resolution = 0.12, #Corresponds roughly to 10x10km
+                 vals = 1)%>%
+  terra::mask(north_sea_vect)
+```
+
+```{r}
+#Define all quarter-year combinations
+q_yr_combo <- expand.grid(quarter = unique(catch_all$quarter),
+            Year = unique(catch_all$Year)) %>%
+  arrange(Year, quarter)
+```
+
+
+```{r}
+#Run the analysis for each quarter-Year combination
+mean_raster <- apply(q_yr_combo,
+                     1, #to apply it row by row 
+                     function(x) {
+                       q <- x["quarter"]
+                       y <- x["Year"]
+                      catch_sf <- catch_all%>%
+  dplyr::filter(quarter == q,
+                Year == y)%>%
+                        st_as_sf(coords = c("Longitude", "Latitude"), crs = "EPSG:4326")
+calculate_mean(r, catch_sf) 
+                     })
+#Turn the list of rasters into a spatraster with different layers
+mean_raster <- terra::rast(mean_raster)
+terra::writeCDF(mean_raster, paste0("mean_raster_", 
+                                    tolower(gsub(" ", "",species)),".nc"), overwrite=TRUE) #remove the space from species name
+```
+
+Split the spatrasters per quarter to check the different years for each quarter.
+```{r}
+n_years <- length(unique(catch_all$Year))
+
+#We split every Q1 from Q3
+split_list <- rep(1:2, times = n_years)
+raster_split <- terra::split(mean_raster, split_list)
+raster_winter <- raster_split[[1]]
+names(raster_winter) <- unique(catch_all$Year)
+raster_summer <- raster_split[[2]]
+names(raster_summer) <- unique(catch_all$Year)
+```
+
+Making plots
+
+```{r}
+plot_mean_raster <- function(mean_raster, quarter, species){
+#Plot the raster
+upper_limit <- 200000
+mean_raster_df <- as.data.frame(terra::clamp(mean_raster, upper = upper_limit, values=TRUE), #put an upper limit on values for plotting purposes
+                                  xy = TRUE) %>%
+  tidyr::pivot_longer(cols = "2015":"2024",
+                      names_to = "Year",
+                      values_to = "mean_catch")
+png(file.path("figures",paste0("raster_",
+tolower(gsub(" ", "",species)),"Q", as.character(quarter) ,".png")), width = 3200, height = 1800, res = 500)
+p <- ggplot() +
+  geom_raster(data = mean_raster_df, aes(x = x, y = y, fill = mean_catch))+
+  geom_sf(data = v, fill = NA)+
+  scale_fill_gradientn(colours = pal, na.value = "transparent",
+                       limits = c(0, 200000),
+                       breaks = seq(0,200000, by = 40000))+
+  labs(title = "Raster with calculated mean catch",
+       subtitle = paste0(species, " Q",as.character(quarter)),
+       x = NULL, y = NULL)+
+  facet_wrap("Year",ncol = 5)
+print(p)
+dev.off()
+}
+```
+
+```{r}
+plot_mean_raster(mean_raster = raster_winter,
+                 quarter = 1,
+                 species = species)
+plot_mean_raster(mean_raster = raster_summer,
+                 quarter = 3,
+                 species = species)
+```
+
+
+### Turn the cells with lower coverage then 0.90 of total years to NA
+
+First we only take the years 2015-2024
+```{r}
+raster_winter <- raster_winter[[16:nlyr(raster_winter)]]
+
+raster_summer
+```
+We put the values of grid cells that have NA values in a certain amount of years to NA.
+This ensures we only look at areas that are well studied over the different years.
+
+
+```{r}
+# First we define this threshold as a percentage.
+thr_year <- 0.90 * nlyr(raster_winter) #Percentage of years that should have data
+
+# count how many layers are non-NA in each cell
+valid_counts <- app(raster_winter, function(x) sum(!is.na(x)))
+terra::plot(valid_counts, col = pal)
+terra::plot(valid_counts >=thr_year)
+# mask out cells where count < threshold
+r_masked <- mask(raster_winter, valid_counts >= thr_year, maskvalues=FALSE,updatevalue = NA)
+names(r_masked) <- seq(from = 2015, to= 2024, by = 1)
+terra::plot(r_masked)
+mean_raster_df <- as.data.frame(terra::clamp(r_masked, upper = 200000, values=TRUE), #put an upper limit on values for plotting purposes
+                                  xy = TRUE) %>%
+  tidyr::pivot_longer(cols = "2015":"2024",
+                      names_to = "Year",
+                      values_to = "mean_catch")
+# png(file.path("figures",paste0("raster_",
+# tolower(gsub(" ", "",species)),"Q", as.character(quarter) ,".png")), width = 3200, height = 1800, res = 500)
+p <- ggplot() +
+  geom_raster(data = mean_raster_df, aes(x = x, y = y, fill = mean_catch))+
+  geom_sf(data = north_sea, fill = NA)+
+  scale_fill_gradientn(colours = pal, na.value = "transparent",
+                       limits = c(0, 200000),
+                       breaks = seq(0,200000, by = 40000))+
+  labs(title = "Raster with calculated mean catch",
+       subtitle = "Only grid cells with data in 90% of the years",
+       x = NULL, y = NULL)+
+  facet_wrap("Year",ncol = 5)
+print(p)
+```
+
+Next step is to calculate the grid cells needed to make up 50% of the values.
+
+```{r}
+terra::plot(r_masked[[1]], col= pal)
+#Choose the threshold for the cumulative percentage
+thr_percent <- 0.5
+#First we order the values from large to small
+#Extract the values
+vals <- as.data.frame(r_masked, cells = TRUE, na.rm = FALSE)
+
+for(i in 2:ncol(vals))
+  #Index the cell column and one of the years
+  df_yr <- vals[,c(1,i)]
+  #Order based on the year value
+  df_ordered <- df_yr[order(df_yr[,2], decreasing = TRUE),]
+  # Calculate cumsum
+  df_ordered$c_sum <- cumsum(df_ordered[,2])
+  total <- sum(df_ordered[,2], na.rm = TRUE)
+  df_ordered$c_percent <- df_ordered$c_sum / total
+  # Flag whenever we reach 50
+  df_ordered$top <- df_ordered$c_percent <= thr_percent
+  #Check how to include cell that crosses 50%
+  
+  #Create a mask based on these true false
+  mask_raster <- rast(r_masked[[i-1]])
+  values(mask_raster) <- NA
+  values(mask_raster)[df_ordered$cell[df_ordered$top]] <- 1
+  terra::plot(mask_raster)
+  
+  
+  terra::plot(terra::vect(north_sea%>%st_transform("EPSG:3035")))
+  terra::plot(terra::mask(r_masked[[8]], mask_raster), col = pal, add = TRUE)
+  
+
+```
+
+```{r}
+#install.packages('leastcostpath')
+library(leastcostpath)
+```
+
+
+

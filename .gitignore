@@ -3,7 +3,7 @@
 .RData
 .Ruserdata
 .nc
-/study_area
+/results
 /figures
-/acoustic
+data/acoustic
 .csv

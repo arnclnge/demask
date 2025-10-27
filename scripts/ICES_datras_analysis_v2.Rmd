@@ -1,0 +1,97 @@
+---
+title: "ICES_datras_analysis_v2"
+author: "Jo-Hannes Nowé"
+date: "2025-10-17"
+output: html_document
+---
+
+```{r loading-packages}
+library(sf)
+library(terra)
+library(dplyr)
+library(ncdf4)
+library(cmocean)
+library(ggplot2)
+```
+
+
+
+Loading the new study area shapefile
+
+```{r}
+study_area <- st_read(file.path("data",
+                                "study_area",
+                                "20250912_10x10km_grid.shp"))
+r <- rast(x = terra::vect(study_area), resolution = 10000)
+v <- rasterize(study_area, r, field = runif(14400))
+plot(v)
+```
+Loading the newly calculated data.
+```{r}
+species <- "Gadus morhua"
+load(file.path("data",
+               "CPUE_km2_2015_2024.RData")) #df
+catch_all<- df %>%
+  dplyr::select(Latitude = ShootLat, #Take this or HaulLat? Or mean of these?
+                Longitude = ShootLong,
+                Year, Month, SpeciesName, Catch = CPUE_number_per_km2)%>%
+  dplyr::mutate(quarter = lubridate::quarter(Month))
+```
+
+```{r}
+#Define all quarter-year combinations
+q_yr_combo <- expand.grid(quarter = unique(catch_all$quarter),
+            Year = unique(catch_all$Year)) %>%
+  arrange(Year, quarter)
+```
+
+Function from the initial analysis we did. Now study area is projected. to 3035.
+
+```{r raster_function}
+source(file.path("functions",
+                 "calculate_mean.R"))
+```
+
+```{r}
+source(file.path("functions",
+                 "qyear_mean.R"))
+cod <- catch_all %>%
+  filter(SpeciesName == "Gadus morhua")
+rasters_cod <- qyear_mean(raster_grid = r, 
+                          q_yr_combo = q_yr_combo,
+                          catch_df = cod)
+raster_cod_q1 <- rasters_cod$q1
+raster_cod_q3 <- rasters_cod$q3
+
+terra::writeCDF(raster_cod_q1, file.path("results",
+                                         paste0("mean_raster_cod_q1.nc"))
+                                                ,overwrite=TRUE)
+terra::writeCDF(raster_cod_q3, file.path("results",
+                                         paste0("mean_raster_cod_q3.nc"))
+                                                ,overwrite=TRUE)
+```
+
+```{r}
+source(file.path("functions",
+                 "plot_raster.R"))
+plot_raster(raster_cod_q1, upper_limit = 100)
+plot_raster(raster_cod_q3, upper_limit = 100)
+```
+
+```{r}
+source(file.path("functions",
+                 "mask_raster.R"))
+cod_q1_masked <- mask_raster(raster_cod_q1, threshold = 0.90)
+cod_q3_masked <- mask_raster(raster_cod_q3, threshold = 0.90)
+plot_raster(cod_q3_masked, upper_limit = 100)
+```
+
+
+```{r}
+source(file.path("functions",
+                 "core_areas.R"))
+core_area_cod_q1 <- core_areas(cod_q1_masked, threshold = 0.5)
+core_area_cod_q3 <- core_areas(cod_q3_masked, threshold = 0.5)
+plot_raster(core_area_cod_q1, upper_limit = 200)
+plot_raster(core_area_cod_q3, upper_limit = 200)
+```
