@@ -9,6 +9,8 @@ execute:
   message: false
 params:
   species: "Gadus morhua"
+  plot_limit: 100
+  years_mask: 0.90
 ---
 
 ```{r loading-packages}
@@ -18,14 +20,14 @@ library(dplyr)
 library(ncdf4)
 library(cmocean)
 library(ggplot2)
+library(here)
 ```
-
 
 
 Loading the new study area shapefile
 
-```{r shapefile}
-study_area <- st_read(file.path("data",
+```{r}
+study_area <- st_read(here("data",
                                 "study_area",
                                 "20250912_10x10km_grid.shp"))
 r <- rast(x = terra::vect(study_area), resolution = 10000)
@@ -33,8 +35,8 @@ v <- rasterize(study_area, r, field = runif(14400))
 plot(v)
 ```
 Loading the newly calculated data.
-```{r load-data}
-load(file.path("data",
+```{r}
+load(here("data",
                "CPUE_km2_2015_2024.RData")) #df
 catch_all<- df %>%
   dplyr::select(Latitude = HaulLat, #Take this or HaulLat? Or mean of these?
@@ -44,7 +46,7 @@ catch_all<- df %>%
   dplyr::filter(SpeciesName == params$species)
 ```
 
-```{r combinations}
+```{r}
 #Define all quarter-year combinations
 q_yr_combo <- expand.grid(quarter = unique(catch_all$quarter),
             Year = unique(catch_all$Year)) %>%
@@ -52,12 +54,12 @@ q_yr_combo <- expand.grid(quarter = unique(catch_all$quarter),
 ```
 
 ```{r raster_function}
-source(file.path("functions",
+source(here("functions",
                  "calculate_mean.R"))
 ```
 
-```{r qyear}
-source(file.path("functions",
+```{r}
+source(here("functions",
                  "qyear_mean.R"))
 rasters_mean <- qyear_mean(raster_grid = r, 
                           q_yr_combo = q_yr_combo,
@@ -66,31 +68,31 @@ raster_q1 <- rasters_mean$q1
 raster_q3 <- rasters_mean$q3
 ```
 
-```{r plot-raster}
-source(file.path("functions",
+```{r}
+source(here("functions",
                  "plot_raster.R"))
-plot_raster(raster_q1, upper_limit = 100, plot_title = paste(params$species,"Q1 mean catch"))
-plot_raster(raster_q3, upper_limit = 100, plot_title = paste(params$species,"Q3 mean catch"))
+plot_raster(raster_q1, upper_limit = params$plot_limit, plot_title = paste(params$species,"Q1 mean catch"))
+plot_raster(raster_q3, upper_limit = params$plot_limit, plot_title = paste(params$species,"Q3 mean catch"))
 ```
 
-```{r mask-raster}
-source(file.path("functions",
+```{r}
+source(here("functions",
                  "mask_raster.R"))
-q1_masked <- mask_raster(raster_q1, threshold = 0.90)
-q3_masked <- mask_raster(raster_q3, threshold = 0.90)
-plot_raster(q1_masked, upper_limit = 100, plot_title = paste(params$species,"Q1 masked mean catch"))
-plot_raster(q3_masked, upper_limit = 100, plot_title = paste(params$species,"Q3 masked mean catch"))
+q1_masked <- mask_raster(raster_q1, threshold = params$years_mask)
+q3_masked <- mask_raster(raster_q3, threshold = params$years_mask)
+plot_raster(q1_masked, upper_limit = params$plot_limit, plot_title = paste(params$species,"Q1 masked mean catch"))
+plot_raster(q3_masked, upper_limit = params$plot_limit, plot_title = paste(params$species,"Q3 masked mean catch"))
 ```
 
 
-```{r core-areas}
-source(file.path("functions",
+```{r}
+source(here("functions",
                  "core_areas.R"))
 threshold_list <- c(0.5,0.6,0.7,0.8)
 for(thr in threshold_list){
 core_area_q1 <- core_areas(q1_masked, threshold = thr)
 core_area_q3 <- core_areas(q3_masked, threshold = thr)
-plot_raster(core_area_q1, upper_limit = 100, plot_title = paste(params$species,"Q1 core areas, threshold:", thr))
-plot_raster(core_area_q3, upper_limit = 100, plot_title = paste(params$species,"Q3 core areas, threshold:", thr))
+print(plot_raster(core_area_q1, upper_limit = params$plot_limit, plot_title = paste(params$species,"Q1 core areas, threshold:", thr)))
+print(plot_raster(core_area_q3, upper_limit = params$plot_limit, plot_title = paste(params$species,"Q3 core areas, threshold:", thr)))
 }
 ```
