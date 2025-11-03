@@ -32,6 +32,6 @@ core_areas <- function(raster, threshold = 0.5){
     core_areas[[i-1]] <- mask(raster[[i-1]], mask)
   }
   core_areas <- terra::rast(core_areas)
-  names(core_areas) <- names(r_masked)
+  names(core_areas) <- names(raster)
   return(core_areas)
 }
