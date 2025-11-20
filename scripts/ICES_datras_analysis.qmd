@@ -2,7 +2,12 @@
 title: "ICES_datras_analysis_v2"
 author: "Jo-Hannes Nowé"
 date: "2025-10-17"
-output: html_document
+format:
+  html:
+    self-contained: true
+    embed-resources: true
+    fig-format: png
+    code-fold: false
 execute:
   echo: false
   warning: false
@@ -11,6 +16,7 @@ params:
   species: "Gadus morhua"
   plot_limit: 100
   years_mask: 0.90
+  consistent_thr: 0.6
 ---
 
 ```{r loading-packages}
@@ -95,4 +101,19 @@ core_area_q3 <- core_areas(q3_masked, threshold = thr)
 print(plot_raster(core_area_q1, upper_limit = params$plot_limit, plot_title = paste(params$species,"Q1 core areas, threshold:", thr)))
 print(plot_raster(core_area_q3, upper_limit = params$plot_limit, plot_title = paste(params$species,"Q3 core areas, threshold:", thr)))
 }
+```
+
+```{r specific-core-areas}
+threshold <- params$consistent_thr
+core_area_q1 <- core_areas(q1_masked, threshold = threshold)
+core_area_q3 <- core_areas(q3_masked, threshold = threshold)
+plot_raster(core_area_q1, upper_limit = 100, plot_title = paste(params$species,"Q1 core areas, threshold:", threshold))
+plot_raster(core_area_q3, upper_limit = 100, plot_title = paste(params$species,"Q3 core areas, threshold:", threshold))
+```
+
+```{r consistent-core}
+source(here("functions",
+            "plot_consistent_core.R"))
+plot_consistent_core(core_area_q1, species = params$species, quarter = "1")
+plot_consistent_core(core_area_q3, species = params$species, quarter = "3")
 ```
