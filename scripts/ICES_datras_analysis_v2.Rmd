@@ -94,3 +94,18 @@ plot_raster(core_area_q1, upper_limit = 100, plot_title = paste(params$species,"
 plot_raster(core_area_q3, upper_limit = 100, plot_title = paste(params$species,"Q3 core areas, threshold:", thr))
 }
 ```
+
+```{r specific-core-areas}
+threshold <- 0.6
+core_area_q1 <- core_areas(q1_masked, threshold = threshold)
+core_area_q3 <- core_areas(q3_masked, threshold = threshold)
+plot_raster(core_area_q1, upper_limit = 100, plot_title = paste(params$species,"Q1 core areas, threshold:", threshold))
+plot_raster(core_area_q3, upper_limit = 100, plot_title = paste(params$species,"Q3 core areas, threshold:", threshold))
+```
+
+```{r}
+source("functions/plot_consistent_core.R")
+plot_consistent_core(core_area_q1, species = "Cod", quarter = "1")
+plot_consistent_core(core_area_q3, species = "Cod", quarter = "3")
+```
+

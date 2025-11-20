@@ -2,10 +2,12 @@
 author: "Jo-Hannes Nowé"
 date: "2025-08-28"
 title: "ICES datras analysis"
-output: 
-  html_document:
-    self_contained: true
-runtime: shiny
+format:
+  html:
+    self-contained: true
+    embed-resources: true
+    fig-format: png
+    code-fold: false
 ---
 
 ## Harvesting data from ICES DATRAS
