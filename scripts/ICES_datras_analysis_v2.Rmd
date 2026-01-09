@@ -108,4 +108,3 @@ source("functions/plot_consistent_core.R")
 plot_consistent_core(core_area_q1, species = "Cod", quarter = "1")
 plot_consistent_core(core_area_q3, species = "Cod", quarter = "3")
 ```
-
