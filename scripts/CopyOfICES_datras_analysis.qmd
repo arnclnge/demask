@@ -13,10 +13,10 @@ execute:
   warning: false
   message: false
 params:
-  species: "Gadus morhua"
-  group: "fish"
+  species: "Mytilus edulis"
+  group: "invertebrates"
   plot_limit: 100
-  years_mask: 0.90
+  years_mask: 0.0
   consistent_thr: 0.6
 ---
 
