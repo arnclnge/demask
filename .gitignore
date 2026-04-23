@@ -2,9 +2,10 @@
 .Rhistory
 .RData
 .Ruserdata
-.nc
+*.nc
 /results
 /figures
 data/acoustic
-.csv
 scripts/ICES_datras_analysis_files/
+*.tif
+*.tiff
