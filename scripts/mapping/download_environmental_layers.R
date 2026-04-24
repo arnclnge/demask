@@ -35,24 +35,8 @@ cm$subset(
   output_filename="temp_sal_bottomt.nc",
   overwrite = TRUE)
 
-#Downloading the bottom salinity
-cm$subset(
-  dataset_id="cmems_mod_glo_phy_my_0.083deg_P1M-m",
-  variables=list("so"),
-  minimum_longitude=xmin,
-  maximum_longitude=xmax,
-  minimum_latitude=ymin,
-  maximum_latitude=ymax,
-  start_datetime=start,
-  end_datetime=end,
-  minimum_depth=0.49402499198913574,
-  maximum_depth=5727.9169921875,
-  output_directory= "data/environmental_data",
-  output_filename="bottomsal.nc",
-  overwrite = TRUE)
 } else{
 tempsal <- terra::rast(here("data","environmental_data","temp_sal_bottomt.nc"))
-bottomsal <- terra::rast(here("data","environmental_data","bottomsal.nc"))
 }
 
 
@@ -111,19 +95,10 @@ if(!file.exists(here("data","environmental_data","bathy.tif"))){
 
 #Calculating the layer salinity at the bottom
 #Will need to check if this is correct and how to do it seasonally
-if(!file.exists(here("data","environmental_data","bottom_sal.nc"))){
-depths <- depth(bottomsal)[1:50]
-depth_r <- rast(bottomsal)
-for(i in 1:nlyr(depth_r)){
-  values(depth_r[[i]]) <- depths[i]
-}
-valid <- depth_r >= bathy
-sal_valid <- mask(bottomsal, valid, maskvalues = FALSE)
-sal_rev <- sal_valid[[nlyr(sal_valid):1]]
-bottom_sal <- app(sal_rev, function(x) x[which(!is.na(x))[1]])
-terra::writeCDF(bottom_sal, here("data","environmental_data","bottom_sal.nc"))
+if(!file.exists(here("data","environmental_data","sal_bottom_cmems.nc"))){
+print("Use the CMEMS bathymetry snooper data application to create this layer")
 } else {
-  bottom_sal <- terra::rast(here("data","environmental_data","bottom_sal.nc"))
+  bottom_sal <- terra::rast(here("data","environmental_data","sal_bottom_cmems.nc"))
 }
 
 if(!file.exists(here("data","environmental_data","q1_so.nc"))){
