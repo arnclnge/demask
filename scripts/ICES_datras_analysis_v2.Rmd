@@ -18,13 +18,17 @@ library(dplyr)
 library(ncdf4)
 library(cmocean)
 library(ggplot2)
+library(ggnewscale)
 ```
 
-
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir = normalizePath("..", winslash = "/"))
+```
 
 Loading the new study area shapefile
 
 ```{r shapefile}
+getwd()
 study_area <- st_read(file.path("data",
                                 "study_area",
                                 "20250912_10x10km_grid.shp"))
@@ -35,7 +39,7 @@ plot(v)
 Loading the newly calculated data.
 ```{r load-data}
 load(file.path("data",
-               "CPUE_km2_2015_2024.RData")) #df
+               "CPUE_km2_2015_2024_fish.RData")) #df
 catch_all<- df %>%
   dplyr::select(Latitude = HaulLat, #Take this or HaulLat? Or mean of these?
                 Longitude = HaulLong,
@@ -105,7 +109,8 @@ plot_raster(core_area_q3, upper_limit = 100, plot_title = paste(params$species,"
 
 ```{r}
 source("functions/plot_consistent_core.R")
-plot_consistent_core(core_area_q1, species = "Cod", quarter = "1")
-plot_consistent_core(core_area_q3, species = "Cod", quarter = "3")
+plot_consistent_core(core_area_q1, species = "Cod", quarter = "1", shp = "cod_spawning2021_imr.shp")
+plot_consistent_core(core_area_q3, species = "Cod", quarter = "3", shp = "cod_spawning2021_imr.shp")
+
 ```
 

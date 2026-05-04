@@ -7,24 +7,49 @@
 #' @examples
 #' plot_raster(raster_cod_q1, upper_limit = 100)
 #' @export
-plot_consistent_core <- function(core_areas, species, quarter){
+plot_consistent_core <- function(core_areas, species, quarter, shp){
+  
   matter <- cmocean("matter")
-  pal <- c("white",matter(9))
+  pal <- c("white", matter(9))
+  
   consistent_core <- app(core_areas, function(x) sum(!is.na(x)))
-  #Plot the raster
-  raster_df <- as.data.frame(consistent_core, xy=TRUE)%>%
-    dplyr::select(years = lyr.1,x,y)
-  p <- ggplot() +
-    geom_raster(data = raster_df, aes(x = x, y = y, fill = years))+
-    geom_sf(data = study_area%>%st_transform("EPSG:3035")%>%st_union(), fill = NA)+
-    scale_fill_gradientn(colours = pal, na.value = "transparent",
-                         limits = c(0, 10),
-                         breaks = seq(0,10, by = 2))+
-    labs(title = "Consistent core areas",
-         subtitle = paste0(species," Q",quarter),
-         x = NULL, y = NULL)
+  
+  # Make zero-count cells transparent
+  consistent_core[consistent_core == 0] <- NA
+  
+  # Export the raster
+  writeRaster(consistent_core,
+    filename = file.path("outputs/raster/", paste0("consistent_core_", species, " Q", quarter, ".tif")),overwrite = TRUE)
+  
+  spawning <- st_read(file.path("data", "spawning", shp), quiet = TRUE)
+  
+  spawning <- st_transform(spawning, terra::crs(consistent_core))
+  
+  spawning$spawning <- 1L
+  
+  spawning_raster <- terra::rasterize(terra::vect(spawning), consistent_core, field = "spawning", background = NA, touches = TRUE)
+  
+  names(spawning_raster) <- "spawning"
+  
+  # Plot the raster
+  raster_df <- as.data.frame(consistent_core, xy = TRUE) %>%
+    dplyr::select(years = lyr.1, x, y)
+  
+  spawning_df <- as.data.frame(spawning_raster, xy = TRUE, na.rm = TRUE)
+  
+  p <- ggplot() + 
+    geom_raster(data = raster_df, aes(x = x, y = y, fill = years)) +
+    scale_fill_gradientn(name = "Years", colours = pal, na.value = "transparent", limits = c(0, 10), breaks = seq(0, 10, by = 2)) +
+    ggnewscale::new_scale_fill() +
+    geom_raster(data = spawning_df, aes(x = x, y = y, fill = "Spawning area"), alpha = 0.35) +
+    scale_fill_manual(name = NULL, values = c("Spawning area" = "red")) +
+    geom_sf(data = study_area %>%
+        st_transform(terra::crs(consistent_core)) %>%
+        st_union(), fill = NA) +
+    labs(title = "Consistent core areas", subtitle = paste0(species, " Q", quarter),
+      x = NULL, y = NULL)
+  
   return(p)
 }
-
 
 
