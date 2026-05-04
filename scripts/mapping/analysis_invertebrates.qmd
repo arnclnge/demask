@@ -1,0 +1,215 @@
+---
+title: "invertebrates_analysis"
+author: "Jo-Hannes Nowé"
+date: "2026-03-12"
+format:
+  html:
+    self-contained: true
+    embed-resources: true
+    fig-format: png
+    code-fold: false
+execute:
+  echo: false
+  warning: false
+  message: false
+params:
+  species: "Nephrops norvegicus"
+  temp_min: 6
+  temp_max: 17
+  so_min: 29
+  so_max: .inf
+  depth_min: 15
+  depth_max: 800
+---
+
+```{r}
+library(here)
+library(sf)
+library(terra)
+library(eunis.habitats)
+library(dplyr)
+library(arrow)
+```
+
+```{r}
+#Chosen parameters for this run
+print(paste("species:",params$species))
+print(paste("temp_min:",params$temp_min))
+print(paste("temp_max:",params$temp_max))
+print(paste("so_min:",params$so_min))
+print(paste("so_max:",params$so_max))
+print(paste("depth_min:",params$depth_min))
+print(paste("depth_max:",params$depth_max))
+```
+
+
+```{r}
+#| output: false
+study_area <- st_read(here("data",
+                                "study_area",
+                                "20250912_10x10km_grid.shp"))
+r <- rast(x = terra::vect(study_area), resolution = 10000)
+v <- rasterize(study_area, r, field = runif(14400))
+terra::plot(v)
+```
+
+```{r}
+#| output: false
+source(here("scripts","mapping","download_environmental_layers.R"))
+```
+
+```{r}
+#Resampling the downloaded environmental layers to the desired resolution
+q1_so_resampled <- project(
+  q1_so,
+  v,
+  method = "bilinear"
+)
+
+q1_thetao_resampled <- project(
+  q1_thetao,
+  v,
+  method = "bilinear"
+)
+q1_bottomT_resampled <- project(
+  q1_bottomT,
+  v,
+  method = "bilinear"
+)
+
+q3_so_resampled <- project(
+  q3_so,
+  v,
+  method = "bilinear"
+)
+
+q3_thetao_resampled <- project(
+  q3_thetao,
+  v,
+  method = "bilinear"
+)
+q3_bottomT_resampled <- project(
+  q3_bottomT,
+  v,
+  method = "bilinear"
+)
+
+bottom_sal_resampled <- project(
+  bottom_sal,
+  v,
+  method = "bilinear"
+)
+
+bathy_resampled <- project(
+  bathy,
+  v,
+  method = "bilinear"
+)
+```
+
+
+
+
+```{r}
+#defining thresholds
+temp_min <- params$temp_min
+temp_max <- params$temp_max
+bottomthermal_mask_winter <- q1_bottomT_resampled >= temp_min & q1_bottomT_resampled <= temp_max
+terra::plot(bottomthermal_mask_winter, main = "Within bottom temperature range in winter", col = c("brown", "yellow"))
+bottomthermal_mask_summer <- q3_bottomT_resampled >= temp_min & q3_bottomT_resampled <= temp_max
+terra::plot(bottomthermal_mask_summer, main = "Within bottom temperature range in summer", col = c("brown", "yellow"))
+```
+
+```{r}
+#| output: false
+thermal_mask_winter <- q1_thetao_resampled >= temp_min & q1_thetao_resampled <= temp_max
+thermal_mask_summer <- q3_thetao_resampled >= temp_min & q3_thetao_resampled <= temp_max
+terra::plot(thermal_mask_winter, col = c("brown", "yellow"))
+terra::plot(thermal_mask_summer, col = c("brown", "yellow"))
+```
+
+```{r}
+so_min <- params$so_min
+so_max <- params$so_max
+q1_so_mask <- q1_so_resampled >= so_min & q1_so_resampled <= so_max
+q3_so_mask <- q3_so_resampled >= so_min & q3_so_resampled <= so_max
+terra::plot(q1_so_mask, main = "Within salinity range in winter", col = c("brown", "yellow"))
+terra::plot(q3_so_mask,main = "Within salinity range in summer", col = c("brown", "yellow"))
+```
+```{r}
+#| output: false
+#Here need to implement bottomsal
+botsal_mask <- bottom_sal_resampled >= so_min & bottom_sal_resampled <= so_max
+terra::plot(botsal_mask, main = "within bottom salinity range", col = c("brown", "yellow"))
+```
+
+
+
+```{r}
+bathy_mask <- bathy_resampled >= -params$depth_max & bathy_resampled <= -params$depth_min
+terra::plot(bathy_mask, , main = "Within bathymetry range", col = c("brown", "yellow"))
+```
+
+
+
+```{r}
+#Based on The categories of habitat
+# https://erddap.emodnet.eu/erddap/info/biology_8777_429f_a47a_d420/index.html
+ids <- 1:161
+code <- c(
+  "MG62","MF62","ME62","MG12","MF12","MG52","MF42","ME12","MG42","ME42",
+  "MF52","ME52","MF32","ME32","MD12","MD52","MD42","MC12","MC42","MB12",
+  "MC52","MB52","MB32","MB42","MD62","MD32","MG32","ME31","MC32","ME11",
+  "ME41","ME61","ME51","MF61","MC62","MB62","MF41","ME221","MD2211","ME21",
+  "MF221","MF31","MG61","MF11","MG11","MD22","MC2211","MB2221","ME22","MB2222",
+  "MB222","MB15","MC151","MD451","ME55","ME15","MC35","MB55","ME35","MD151",
+  "MF55","MC223","MF15","MB2212","MD651","MC651","MF35","MB35","MB22","MC22",
+  "ME65","MF65","ME45","MB65","MF45","MB221","MC451","MC45","MB252","MG41",
+  "MB2223","MC2235","MB2211","MC221","MB2523","MG65","MG55","MC251","MG15",
+  "MG35","MD31","MD61","MB43","MB53","MC43","MC53","MC63","MD63","MB63",
+  "MD53","MD43","MC33","MB33","MD33","MC11","MC51","MC31","MB11","MB23",
+  "MD41","MC61","MC41","MB61","MD51","MB51","MD11","MB652","MB554","MB152",
+  "MC55","MB13","MF65 or MF55","MD13","MC13","MB53 or MB63","ME65 or ME55",
+  "MC651 or MC451 or MC35","MC53 or MC63","MD651 or MD451","MB65 or MB55",
+  "MD53 or MD63","MB2531","MF51","MB41","MC44","MB64","MD44","MD64","MC64",
+  "MC54","MD54","MB54","MD34","MC34","MB44","MB34","ME64 or MF64",
+  "MD54 or MD64","MC54 or MC64","MB14","MB54 or MB64","MC14",
+  "ME44 or MF44","ME34 or MF34","ME54 or MF54 or ME64 or MF64",
+  "ME54 or MF54","MG44","MG64","MB31","MG54 or MG64","MG54"
+)
+df <- data.frame(
+  ID = ids,
+  code = code,
+  stringsAsFactors = FALSE
+)
+
+benthos_full_matched <- read_parquet("https://github.com/tomjwebb/EUNIS_benthos_species/raw/refs/heads/master/data/derived_data/benthos_full_matched.parquet")
+species_by_eunis <- benthos_full_matched %>%
+  dplyr::select(aphia_id, scientificname, EUNIS2019C, EUNIS2019D) %>% 
+  distinct() %>% 
+  arrange(EUNIS2019C)
+habs <- species_by_eunis %>% 
+  filter(scientificname == params$species)
+keep_habs <- df[code%in%habs$EUNIS2019C,]
+keep_ids <- keep_habs$ID
+```
+
+```{r}
+habitats_mask <- terra::ifel(
+  is.na(habitats_rast),
+  NA,
+  habitats_rast %in% keep_ids
+)
+levels(habitats_mask) <- data.frame(
+  value = c(0, 1),
+  label = c("False", "True")
+)
+plot(habitats_mask, main= "suitable EUNIS habitat",col = c("brown", "yellow"))
+```
+```{r}
+rasters_winter <- c(habitats_mask, bathy_mask, bottomthermal_mask_winter, q1_so_mask)
+terra::plot(terra::app(rasters_winter, sum), main = "amount of positive conditions in winter")
+rasters_summer <- c(habitats_mask, bathy_mask, bottomthermal_mask_summer, q3_so_mask)
+terra::plot(terra::app(rasters_summer, sum), main = "amount of positive conditions in summer")
+```
+

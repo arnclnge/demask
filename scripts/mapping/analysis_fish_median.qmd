@@ -13,10 +13,10 @@ execute:
   warning: false
   message: false
 params:
-  species: "Mytilus edulis"
-  group: "invertebrates"
+  species: "Gadus morhua"
+  group: "fish"
   plot_limit: 100
-  years_mask: 0.0
+  years_mask: 0.90
   consistent_thr: 0.6
 ---
 
@@ -54,7 +54,7 @@ Loading the newly calculated data.
 ```{r}
 load(here("data",paste0("CPUE_km2_2015_2024_",params$group,".RData"))) #df depends on group
 catch_all<- df %>%
-  dplyr::select(Latitude = HaulLat, #Take this or HaulLat? Or mean of these?
+  dplyr::select(Latitude = HaulLat, #Take this or HaulLat? Or median of these?
                 Longitude = HaulLong,
                 Year, Month, SpeciesName, Catch = CPUE_number_per_km2)%>%
   dplyr::mutate(quarter = lubridate::quarter(Month))%>%
@@ -70,24 +70,24 @@ q_yr_combo <- expand.grid(quarter = unique(catch_all$quarter),
 
 ```{r raster_function}
 source(here("functions",
-                 "calculate_mean.R"))
+                 "calculate_median.R"))
 ```
 
 ```{r}
 source(here("functions",
-                 "qyear_mean.R"))
-rasters_mean <- qyear_mean(raster_grid = r, 
+                 "qyear_median.R"))
+rasters_median <- qyear_median(raster_grid = r, 
                           q_yr_combo = q_yr_combo,
                           catch_df = catch_all)
-raster_q1 <- rasters_mean$q1
-raster_q3 <- rasters_mean$q3
+raster_q1 <- rasters_median$q1
+raster_q3 <- rasters_median$q3
 ```
 
 ```{r}
 source(here("functions",
                  "plot_raster.R"))
-plot_raster(raster_q1, upper_limit = params$plot_limit, plot_title = paste(params$species,"Q1 mean catch"))
-plot_raster(raster_q3, upper_limit = params$plot_limit, plot_title = paste(params$species,"Q3 mean catch"))
+plot_raster(raster_q1, upper_limit = params$plot_limit, plot_title = paste(params$species,"Q1 median catch"))
+plot_raster(raster_q3, upper_limit = params$plot_limit, plot_title = paste(params$species,"Q3 median catch"))
 ```
 
 ```{r}
@@ -95,8 +95,8 @@ source(here("functions",
                  "mask_raster.R"))
 q1_masked <- mask_raster(raster_q1, threshold = params$years_mask)
 q3_masked <- mask_raster(raster_q3, threshold = params$years_mask)
-plot_raster(q1_masked, upper_limit = params$plot_limit, plot_title = paste(params$species,"Q1 masked mean catch"))
-plot_raster(q3_masked, upper_limit = params$plot_limit, plot_title = paste(params$species,"Q3 masked mean catch"))
+plot_raster(q1_masked, upper_limit = params$plot_limit, plot_title = paste(params$species,"Q1 masked median catch"))
+plot_raster(q3_masked, upper_limit = params$plot_limit, plot_title = paste(params$species,"Q3 masked median catch"))
 ```
 
 

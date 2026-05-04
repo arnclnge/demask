@@ -4,7 +4,7 @@ library(quarto)
 # FISH --------------------------------------------------------------------
 quarto_render(
   input = file.path("scripts",
-                    "ICES_datras_analysis.qmd"),
+                    "analysis_mean.qmd"),
   output_file = file.path("results_cod.html"),
   execute_params = list(species = "Gadus morhua",
                         group = "fish", #because code also works for invertebrates now
@@ -16,7 +16,7 @@ consistent_thr = 0.6)) #grid cells with less than 90% of data are NA
 
 quarto_render(
   input = file.path("scripts",
-                    "ICES_datras_analysis.qmd"),
+                    "analysis_mean.qmd"),
   output_file = file.path("results_haddock.html"),
   execute_params = list(species = "Melanogrammus aeglefinus",
                         group = "fish",
@@ -26,7 +26,7 @@ quarto_render(
 
 quarto_render(
   input = file.path("scripts",
-                    "ICES_datras_analysis.qmd"),
+                    "analysis_mean.qmd"),
   output_file = file.path("results_seabass.html"),
   execute_params = list(species = "Dicentrarchus labrax",
                         group = "fish",
@@ -36,7 +36,7 @@ quarto_render(
 
 quarto_render(
   input = file.path("scripts",
-                    "ICES_datras_analysis.qmd"),
+                    "analysis_mean.qmd"),
   output_file = file.path("results_ling.html"),
   execute_params = list(species = "Molva molva",
                         group = "fish",
@@ -46,7 +46,7 @@ quarto_render(
 
 quarto_render(
   input = file.path("scripts",
-                    "ICES_datras_analysis.qmd"),
+                    "analysis_mean.qmd"),
   output_file = file.path("results_herring.html"),
   execute_params = list(species = "Clupea harengus",
                         group = "fish",
@@ -58,16 +58,16 @@ quarto_render(
 # INVERTEBRATES -----------------------------------------------------------
 quarto_render(
   input = file.path("scripts",
-                    "ICES_datras_analysis.qmd"),
+                    "analysis_mean.qmd"),
   output_file = file.path("results_europeanlobster.html"),
   execute_params = list(species = "Homarus gammarus",
                         group = "invertebrates",
                         plot_limit = 100,
-                        years_mask = 0.70,
+                        years_mask = 0.05,
                         consistent_thr = 0.6))
 quarto_render(
   input = file.path("scripts",
-                    "ICES_datras_analysis.qmd"),
+                    "analysis_mean.qmd"),
   output_file = file.path("results_cuttlefish.html"),
   execute_params = list(species = "Sepia officinalis",
                         group = "invertebrates",
@@ -76,7 +76,7 @@ quarto_render(
                         consistent_thr = 0.6))
 quarto_render(
   input = file.path("scripts",
-                    "ICES_datras_analysis.qmd"),
+                    "analysis_mean.qmd"),
   output_file = file.path("results_scallop.html"),
   execute_params = list(species = "Pecten maximus",
                         group = "invertebrates",
@@ -85,7 +85,7 @@ quarto_render(
                         consistent_thr = 0.6))
 quarto_render(
   input = file.path("scripts",
-                    "ICES_datras_analysis.qmd"),
+                    "analysis_mean.qmd"),
   output_file = file.path("results_norwaylobster.html"),
   execute_params = list(species = "Nephrops norvegicus",
                         group = "invertebrates",
@@ -94,7 +94,7 @@ quarto_render(
                         consistent_thr = 0.6))
 quarto_render(
   input = file.path("scripts",
-                    "ICES_datras_analysis.qmd"),
+                    "analysis_mean.qmd"),
   output_file = file.path("results_mussel.html"),
   execute_params = list(species = "Mytilus edulis",
                         group = "invertebrates",
