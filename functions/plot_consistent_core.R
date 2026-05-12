@@ -17,37 +17,51 @@ plot_consistent_core <- function(core_areas, species, quarter, shp){
   # Make zero-count cells transparent
   consistent_core[consistent_core == 0] <- NA
   
-  # Export the raster
-  writeRaster(consistent_core,
-    filename = file.path("outputs/raster/", paste0("consistent_core_", species, " Q", quarter, ".tif")),overwrite = TRUE)
+  if(is.null(shp) || !file.exists(here("data", "spawning", shp))){
+    print("No valid spawning shapefile given")
+    # Plot the raster
+    raster_df <- as.data.frame(consistent_core, xy = TRUE) %>%
+      dplyr::select(years = lyr.1, x, y)
+
+    p <- ggplot() + 
+      geom_raster(data = raster_df, aes(x = x, y = y, fill = years)) +
+      scale_fill_gradientn(name = "Years", colours = pal, na.value = "transparent", limits = c(0, 10), breaks = seq(0, 10, by = 2)) +
+      geom_sf(data = study_area %>%
+                st_transform(terra::crs(consistent_core)) %>%
+                st_union(), fill = NA) +
+      labs(title = "Consistent core areas", subtitle = paste0(species, " Q", quarter),
+           x = NULL, y = NULL)
+  } else {
+    spawning <- st_read(here("data", "spawning", shp), quiet = TRUE)
+    
+    spawning <- st_transform(spawning, terra::crs(consistent_core))
+    
+    spawning$spawning <- 1L
+    
+    spawning_raster <- terra::rasterize(terra::vect(spawning), consistent_core, field = "spawning", background = NA, touches = TRUE)
+    
+    names(spawning_raster) <- "spawning"
+    
+    # Plot the raster
+    raster_df <- as.data.frame(consistent_core, xy = TRUE) %>%
+      dplyr::select(years = lyr.1, x, y)
+    
+    spawning_df <- as.data.frame(spawning_raster, xy = TRUE, na.rm = TRUE)
+    
+    p <- ggplot() + 
+      geom_raster(data = raster_df, aes(x = x, y = y, fill = years)) +
+      scale_fill_gradientn(name = "Years", colours = pal, na.value = "transparent", limits = c(0, 10), breaks = seq(0, 10, by = 2)) +
+      ggnewscale::new_scale_fill() +
+      geom_raster(data = spawning_df, aes(x = x, y = y, fill = "Spawning area"), alpha = 0.35) +
+      scale_fill_manual(name = NULL, values = c("Spawning area" = "red")) +
+      geom_sf(data = study_area %>%
+                st_transform(terra::crs(consistent_core)) %>%
+                st_union(), fill = NA) +
+      labs(title = "Consistent core areas", subtitle = paste0(species, " Q", quarter),
+           x = NULL, y = NULL)
+  }
+
   
-  spawning <- st_read(file.path("data", "spawning", shp), quiet = TRUE)
-  
-  spawning <- st_transform(spawning, terra::crs(consistent_core))
-  
-  spawning$spawning <- 1L
-  
-  spawning_raster <- terra::rasterize(terra::vect(spawning), consistent_core, field = "spawning", background = NA, touches = TRUE)
-  
-  names(spawning_raster) <- "spawning"
-  
-  # Plot the raster
-  raster_df <- as.data.frame(consistent_core, xy = TRUE) %>%
-    dplyr::select(years = lyr.1, x, y)
-  
-  spawning_df <- as.data.frame(spawning_raster, xy = TRUE, na.rm = TRUE)
-  
-  p <- ggplot() + 
-    geom_raster(data = raster_df, aes(x = x, y = y, fill = years)) +
-    scale_fill_gradientn(name = "Years", colours = pal, na.value = "transparent", limits = c(0, 10), breaks = seq(0, 10, by = 2)) +
-    ggnewscale::new_scale_fill() +
-    geom_raster(data = spawning_df, aes(x = x, y = y, fill = "Spawning area"), alpha = 0.35) +
-    scale_fill_manual(name = NULL, values = c("Spawning area" = "red")) +
-    geom_sf(data = study_area %>%
-        st_transform(terra::crs(consistent_core)) %>%
-        st_union(), fill = NA) +
-    labs(title = "Consistent core areas", subtitle = paste0(species, " Q", quarter),
-      x = NULL, y = NULL)
   
   return(p)
 }

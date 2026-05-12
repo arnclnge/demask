@@ -13,12 +13,13 @@ execute:
   warning: false
   message: false
 params:
-  species: "Gadus morhua"
+  species: "Dicentrarchus labrax"
   group: "fish"
   plot_limit: 200
-  years_mask: 0.90
-  consistent_thr: 0.6
+  years_mask: 0.0
+  consistent_thr: 0.5
   idp_value: 1
+  max_distance: 65000
 ---
 
 ```{r loading-packages}
@@ -40,6 +41,7 @@ print(paste("plot_limit:",params$plot_limit))
 print(paste("years_mask:",params$years_mask))
 print(paste("consistent_thr:",params$consistent_thr))
 print(paste("idp_value:",params$idp_value))
+print(paste("max_distance:", params$max_distance))
 ```
 
 
@@ -85,7 +87,8 @@ source(here("functions",
 rasters_interpolation <- qyear_interpolation(raster_grid = v, 
                           q_yr_combo = q_yr_combo,
                           catch_df = catch_all,
-                          idp_value = params$idp_value)
+                          idp_value = params$idp_value,
+                          max_distance = params$max_distance)
 raster_q1 <- rasters_interpolation$q1
 raster_q3 <- rasters_interpolation$q3
 ```
@@ -99,21 +102,11 @@ plot_raster(raster_q3, upper_limit = params$plot_limit, plot_title = paste(param
 
 ```{r}
 source(here("functions",
-                 "mask_raster.R"))
-q1_masked <- mask_raster(raster_q1, threshold = params$years_mask)
-q3_masked <- mask_raster(raster_q3, threshold = params$years_mask)
-plot_raster(q1_masked, upper_limit = params$plot_limit, plot_title = paste(params$species,"Q1 masked interpolated catch"))
-plot_raster(q3_masked, upper_limit = params$plot_limit, plot_title = paste(params$species,"Q3 masked interpolated catch"))
-```
-
-
-```{r}
-source(here("functions",
                  "core_areas.R"))
 threshold_list <- c(0.5,0.6,0.7,0.8)
 for(thr in threshold_list){
-core_area_q1 <- core_areas(q1_masked, threshold = thr)
-core_area_q3 <- core_areas(q3_masked, threshold = thr)
+core_area_q1 <- core_areas(raster_q1, threshold = thr)
+core_area_q3 <- core_areas(raster_q3, threshold = thr)
 print(plot_raster(core_area_q1, upper_limit = params$plot_limit, plot_title = paste(params$species,"Q1 core areas, threshold:", thr)))
 print(plot_raster(core_area_q3, upper_limit = params$plot_limit, plot_title = paste(params$species,"Q3 core areas, threshold:", thr)))
 }
@@ -121,8 +114,8 @@ print(plot_raster(core_area_q3, upper_limit = params$plot_limit, plot_title = pa
 
 ```{r specific-core-areas}
 threshold <- params$consistent_thr
-core_area_q1 <- core_areas(q1_masked, threshold = threshold)
-core_area_q3 <- core_areas(q3_masked, threshold = threshold)
+core_area_q1 <- core_areas(raster_q1, threshold = threshold)
+core_area_q3 <- core_areas(raster_q3, threshold = threshold)
 plot_raster(core_area_q1, upper_limit = 100, plot_title = paste(params$species,"Q1 core areas, threshold:", threshold))
 plot_raster(core_area_q3, upper_limit = 100, plot_title = paste(params$species,"Q3 core areas, threshold:", threshold))
 ```
@@ -130,6 +123,23 @@ plot_raster(core_area_q3, upper_limit = 100, plot_title = paste(params$species,"
 ```{r consistent-core}
 source(here("functions",
             "plot_consistent_core.R"))
-plot_consistent_core(core_area_q1, species = params$species, quarter = "1")
-plot_consistent_core(core_area_q3, species = params$species, quarter = "3")
+plot_consistent_core(core_area_q1, species = params$species, quarter = "1", shp= paste0(stringr::str_to_lower(params$species)%>%
+  stringr::str_replace(" ","_"),"_spawning_imr.shp"))
+plot_consistent_core(core_area_q3, species = params$species, quarter = "3",shp= paste0(stringr::str_to_lower(params$species)%>%
+  stringr::str_replace(" ","_"),"_spawning_imr.shp"))
 ```
+
+```{r scoring}
+source(here("functions",
+            "scoring_raster.R"))
+scoring_raster(core_area_q1, species = params$species,
+               quarter = "1",
+               shp= paste0(stringr::str_to_lower(params$species)%>%
+  stringr::str_replace(" ","_"),"_spawning_imr.shp"))
+scoring_raster(core_area_q3, species = params$species,
+               quarter = "3",
+               shp =paste0(stringr::str_to_lower(params$species)%>%
+  stringr::str_replace(" ","_"),"_spawning_imr.shp"))
+```
+
+

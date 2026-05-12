@@ -8,18 +8,24 @@
 #' @examples
 #' interpolated_raster <- calculate_interpolation(r, catch_sf) 
 #' @export
-calculate_interpolation <- function(raster_grid, catch_sf, idp_value){
+calculate_interpolation <- function(raster_grid, catch_sf, idp_value, max_distance){
   grid_pts <- as.points(raster_grid) |> 
     st_as_sf()
+  if (nrow(catch_sf) == 0) {
+    r_empty <- terra::rast(raster_grid)
+    terra::values(r_empty) <- NA
+    return(r_empty)
+  } else{
   idw_out <- gstat::idw(
     formula = Catch ~ 1,
     locations = catch_sf,
     newdata = grid_pts,
-    idp = idp_value)
+    idp = idp_value,
+    maxdist = as.numeric(max_distance))
   interpolate_sf <- st_as_sf(idw_out)
   r_interpolate <- rasterize(x = interpolate_sf,
                              y = raster_grid,
                              field = "var1.pred"
   )
-  return(r_interpolate)
+  return(r_interpolate)}
 }

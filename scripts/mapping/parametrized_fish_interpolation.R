@@ -9,11 +9,12 @@ quarto_render(
   output_file = file.path("results_cod_1.html"),
   execute_params = list(species = "Gadus morhua",
                         group = "fish", #because code also works for invertebrates now
-                        plot_limit = 200,#Change this to change the maximum value plotted,
+                        plot_limit = 300,#Change this to change the maximum value plotted,
 #Everything above this value gets the same value and color, for plot clarity reasons
-years_mask = 0.90,
+years_mask = 0.0,
 consistent_thr = 0.5,
-idp_value = 1)) #grid cells with less than 90% of data are NA
+idp_value = 1,
+max_distance = 65000)) #grid cells with less than 90% of data are NA
 quarto_render(
   input = file.path("scripts",
                     "mapping",
@@ -23,9 +24,10 @@ quarto_render(
                         group = "fish", #because code also works for invertebrates now
                         plot_limit = 200,#Change this to change the maximum value plotted,
                         #Everything above this value gets the same value and color, for plot clarity reasons
-                        years_mask = 0.90,
+                        years_mask = 0.0,
                         consistent_thr = 0.5,
-                        idp_value = 2)) #grid cells with less than 90% of data are NA
+                        idp_value = 2,
+                        max_distance = 65000)) #grid cells with less than 90% of data are NA
 
 quarto_render(
   input = file.path("scripts",
@@ -34,10 +36,11 @@ quarto_render(
   output_file = file.path("results_haddock_1.html"),
   execute_params = list(species = "Melanogrammus aeglefinus",
                         group = "fish",
-                        plot_limit = 100,
-                        years_mask = 0.90,
+                        plot_limit = 300,
+                        years_mask = 0.0,
                         consistent_thr = 0.5,
-                        idp_value = 1))
+                        idp_value = 1,
+                        max_distance = 65000))
 quarto_render(
   input = file.path("scripts",
                     "mapping",
@@ -56,10 +59,11 @@ quarto_render(
   output_file = file.path("results_seabass_1.html"),
   execute_params = list(species = "Dicentrarchus labrax",
                         group = "fish",
-                        plot_limit = 100,
-                        years_mask = 0.70,
-                        consistent_thr =0.6,
-                        idp_value = 1)) #otherwise no grid cells in summer, summer2015&2016 no data
+                        plot_limit = 300,
+                        years_mask = 0.00,
+                        consistent_thr =0.5,
+                        idp_value = 1,
+                        max_distance = 65000)) #otherwise no grid cells in summer, summer2015&2016 no data
 quarto_render(
   input = file.path("scripts",
                     "mapping",
@@ -78,10 +82,11 @@ quarto_render(
   output_file = file.path("results_ling_1.html"),
   execute_params = list(species = "Molva molva",
                         group = "fish",
-                        plot_limit = 100,
-                        years_mask = 0.90,
-                        consistent_thr = 0.6,
-                        idp_value = 1))
+                        plot_limit = 300,
+                        years_mask = 0.00,
+                        consistent_thr = 0.5,
+                        idp_value = 1,
+                        max_distance = 65000))
 quarto_render(
   input = file.path("scripts",
                     "mapping",
@@ -100,10 +105,11 @@ quarto_render(
   output_file = file.path("results_herring_1.html"),
   execute_params = list(species = "Clupea harengus",
                         group = "fish",
-                        plot_limit = 100,
-                        years_mask = 0.90,
-                        consistent_thr = 0.6,
-                        idp_value = 1))
+                        plot_limit = 300,
+                        years_mask = 0.00,
+                        consistent_thr = 0.5,
+                        idp_value = 1,
+                        max_distance = 65000))
 quarto_render(
   input = file.path("scripts",
                     "mapping",

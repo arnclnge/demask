@@ -66,7 +66,7 @@ if(!file.exists(here("data","environmental_data","bathy.tif"))){
     endslice <- bbox[[1]] + i*stepsize
     #We get an error because the file is too big, will split up in horizontal slices, and then merge together later 
     con <-paste0("https://ows.emodnet-bathymetry.eu/wcs?service=wcs&version=1.0.0&request=getcoverage&coverage=emodnet:mean&crs=EPSG:4326&BBOX=",beginslice,",",bbox[[2]],",",endslice,",",bbox[[4]],"&format=image/tiff&interpolation=nearest&resx=0.08333333&resy=0.08333333")
-    nomfich <- file.path("data","environmental_data",paste0("bathy_sliced/","slice_",i, "img_.tiff"))
+    nomfich <- here("data","environmental_data",paste0("bathy_sliced/","slice_",i, "img_.tiff"))
     download(con, nomfich, quiet = TRUE, mode = "wb")
     
   }
@@ -74,7 +74,7 @@ if(!file.exists(here("data","environmental_data","bathy.tif"))){
   
   #merge them together
   bathyrasters <- list()
-  for(file in list.files(file.path("data","environmental_data","bathy_sliced"))){
+  for(file in list.files(here("data","environmental_data","bathy_sliced"))){
     bathyrasters[[file]] <- terra::rast(here("data","environmental_data",paste0("bathy_sliced/",file))) 
   }
   #Put the different spatrasters together in a spatrastercollection
@@ -83,7 +83,7 @@ if(!file.exists(here("data","environmental_data","bathy.tif"))){
   #Merge the spatrastercollection
   bathy <- merge(bathy_coll)
   bathy[bathy>0] <- NA
-  tempsal <- terra::rast(file.path("data","environmental_data","temp_sal_bottomt.nc"))
+  tempsal <- terra::rast(here("data","environmental_data","temp_sal_bottomt.nc"))
   bathy <- terra::resample(bathy, tempsal[[1]])
   names(bathy) <-"bathy"
   writeRaster(bathy,here("data","environmental_data","bathy.tif"), overwrite=TRUE)
