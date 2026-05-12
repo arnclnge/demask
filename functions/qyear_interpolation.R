@@ -8,7 +8,7 @@
 #' @examples
 #' quarters <- qyear_median(raster_grid, q_yr_combo, catch_df) 
 #' @export
-qyear_interpolation <- function(raster_grid, q_yr_combo, catch_df, idp_value){
+qyear_interpolation <- function(raster_grid, q_yr_combo, catch_df, idp_value, max_distance){
   #Run the analysis for each Quarter-Year combination
   interpolation_raster <- apply(q_yr_combo,
                        1, #to apply it row by row 
@@ -19,7 +19,7 @@ qyear_interpolation <- function(raster_grid, q_yr_combo, catch_df, idp_value){
                            dplyr::filter(quarter == q,
                                          Year == y)%>%
                            st_as_sf(coords = c("Longitude", "Latitude"), crs = "EPSG:4326")%>%sf::st_transform(crs = "EPSG:3035")
-                         calculate_interpolation(raster_grid, catch_sf, idp_value) 
+                         calculate_interpolation(raster_grid, catch_sf, idp_value, max_distance) 
                        })
   #Turn the list of rasters into a spatraster with different layers
   interpolation_raster <- terra::rast(interpolation_raster)
