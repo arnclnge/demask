@@ -3,10 +3,15 @@ library(sf)
 library(lubridate)
 library(dplyr)
 library(here)
-#renv::use_python() first time
+
+use_virtualenv("r-reticulate", required = TRUE)
+
+#use_python("C:/Program Files/Python314/python.exe", required = TRUE) # first time
 #py_install('Copernicusmarine')
-bbox <- st_bbox(st_transform(study_area,crs  = 4326))
 #py_install("h5py")
+
+bbox <- st_bbox(st_transform(study_area,crs  = 4326))
+
 xmin <- bbox[[1]]
 xmax <- bbox[[3]]
 ymin <- bbox[[2]]
@@ -19,7 +24,7 @@ start <- as.POSIXct(date_start, format = "%Y-%m-%d")%>%
   format("%Y-%m-%dT%H:%M:%S")
 end <- as.POSIXct(date_end, format = "%Y-%m-%d")%>%
   format("%Y-%m-%dT%H:%M:%S")
-#cm$login()
+cm$login("acalonge", "faJAZ7h9X#K3#Bc")
 cm$subset(
   dataset_id="cmems_mod_glo_phy_my_0.083deg_P1M-m",
   variables=c("so", "thetao", "bottomT"),
@@ -66,7 +71,7 @@ if(!file.exists(here("data","environmental_data","bathy.tif"))){
     endslice <- bbox[[1]] + i*stepsize
     #We get an error because the file is too big, will split up in horizontal slices, and then merge together later 
     con <-paste0("https://ows.emodnet-bathymetry.eu/wcs?service=wcs&version=1.0.0&request=getcoverage&coverage=emodnet:mean&crs=EPSG:4326&BBOX=",beginslice,",",bbox[[2]],",",endslice,",",bbox[[4]],"&format=image/tiff&interpolation=nearest&resx=0.08333333&resy=0.08333333")
-    nomfich <- file.path("data","environmental_data",paste0("bathy_sliced/","slice_",i, "img_.tiff"))
+    nomfich <- here("data","environmental_data",paste0("bathy_sliced/","slice_",i, "img_.tiff"))
     download(con, nomfich, quiet = TRUE, mode = "wb")
     
   }
@@ -74,7 +79,7 @@ if(!file.exists(here("data","environmental_data","bathy.tif"))){
   
   #merge them together
   bathyrasters <- list()
-  for(file in list.files(file.path("data","environmental_data","bathy_sliced"))){
+  for(file in list.files(here("data","environmental_data","bathy_sliced"))){
     bathyrasters[[file]] <- terra::rast(here("data","environmental_data",paste0("bathy_sliced/",file))) 
   }
   #Put the different spatrasters together in a spatrastercollection
@@ -83,7 +88,7 @@ if(!file.exists(here("data","environmental_data","bathy.tif"))){
   #Merge the spatrastercollection
   bathy <- merge(bathy_coll)
   bathy[bathy>0] <- NA
-  tempsal <- terra::rast(file.path("data","environmental_data","temp_sal_bottomt.nc"))
+  tempsal <- terra::rast(here("data","environmental_data","temp_sal_bottomt.nc"))
   bathy <- terra::resample(bathy, tempsal[[1]])
   names(bathy) <-"bathy"
   writeRaster(bathy,here("data","environmental_data","bathy.tif"), overwrite=TRUE)

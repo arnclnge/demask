@@ -10,3 +10,4 @@ scripts/ICES_datras_analysis_files/
 *.tif
 *.tiff
 data/EMODnet_Seabed_Substrate_Multiscale_SHP
+.positai
