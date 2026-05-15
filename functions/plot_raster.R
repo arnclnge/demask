@@ -19,7 +19,8 @@ plot_raster <- function(raster, upper_limit, plot_title = NULL, plot_subtitle = 
                         values_to = "mean_catch")
   p <- ggplot() +
     geom_sf(data = study_area%>%st_transform("EPSG:3035")%>%st_union(), fill = NA)+
-    geom_raster(data = raster_df, aes(x = x, y = y, fill = mean_catch))+
+    geom_raster(data = raster_df %>% dplyr::filter(!is.na(mean_catch), mean_catch > 0),aes(x=x, y=y, fill=mean_catch))+
+    geom_raster(data = raster_df %>% dplyr::filter(!is.na(mean_catch), mean_catch > 0), aes(x = x, y = y, fill = mean_catch))+
     scale_fill_gradientn(colours = pal, na.value = "transparent",
                          limits = c(0, upper_limit),
                          breaks = seq(0,upper_limit, by = upper_limit/10))+

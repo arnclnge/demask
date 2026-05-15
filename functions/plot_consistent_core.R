@@ -12,10 +12,14 @@ plot_consistent_core <- function(core_areas, species, quarter, shp){
   matter <- cmocean("matter")
   pal <- c("white", matter(9))
   
-  consistent_core <- app(core_areas, function(x) sum(!is.na(x)))
+  consistent_core <- app(core_areas, function(x) {
+    if (all(is.na(x))) {
+      NA_real_
+    } else {sum(x == 1, na.rm = TRUE)}
+  })
   
   # Make zero-count cells transparent
-  consistent_core[consistent_core == 0] <- NA
+  #consistent_core[consistent_core == 0] <- NA
   
   if(is.null(shp) || !file.exists(here("data", "spawning", shp))){
     print("No valid spawning shapefile given")

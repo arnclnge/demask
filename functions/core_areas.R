@@ -26,10 +26,12 @@ core_areas <- function(raster, threshold = 0.5){
       seq_len(nrow(df_ordered)) == which(df_ordered$c_percent > threshold)[1]
     cell_nrs <- df_ordered[df_ordered$top==TRUE,1]
     #Create a mask based on these true false
-    mask <- rast(raster[[i-1]])
-    mask[] <- NA
-    mask[cell_nrs] <- 1 #only keep core area cells
-    core_areas[[i-1]] <- mask(raster[[i-1]], mask)
+    out <- rast(raster[[i - 1]])
+    out[] <- NA
+    out[!is.na(raster[[i - 1]])] <- 0
+    out[cell_nrs] <- 1
+    
+    core_areas[[i - 1]] <- out
   }
   core_areas <- terra::rast(core_areas)
   names(core_areas) <- names(raster)

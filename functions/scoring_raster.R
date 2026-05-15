@@ -1,11 +1,14 @@
 scoring_raster <- function(core_areas, species, quarter, shp = NULL){
-  consistent_core <- app(core_areas, function(x) sum(!is.na(x)))
+  consistent_core <- app(core_areas, function(x) {
+    if (all(is.na(x))) {NA_real_
+    } else {
+      sum(x == 1, na.rm = TRUE)}
+  })
   # Make zero-count cells transparent
-  consistent_core[consistent_core == 0] <- NA
-  consistent_core[consistent_core == 1] <- 1
-  consistent_core[consistent_core %in% 2:3] <- 2
-  consistent_core[consistent_core %in% 4:7] <- 3
-  consistent_core[consistent_core %in% 8:10] <- 4
+  consistent_core[consistent_core == 0] <- 0
+  consistent_core[consistent_core %in% 1:2] <- 1
+  consistent_core[consistent_core %in% 3:6] <- 2
+  consistent_core[consistent_core %in% 7:10] <- 3
   
   if(is.null(shp) || !file.exists(here("data", "spawning", shp))){
     n_classes <-4
@@ -20,8 +23,8 @@ scoring_raster <- function(core_areas, species, quarter, shp = NULL){
     consistent_core <- terra::mask(consistent_core,
                                    mask = spawning_raster,
                                    maskvalues = TRUE,
-                                   updatevalue = 5)
-    n_classes <- 5
+                                   updatevalue = 4)
+    n_classes <- 4
   }
   
   # Plot the raster
@@ -30,12 +33,12 @@ scoring_raster <- function(core_areas, species, quarter, shp = NULL){
     dplyr::mutate(score = factor(score))
   matter <- cmocean("matter")
   cols <- matter(9)
-  idx <- if (n_classes == 5) {
-    c(1, 3, 5, 7, 9)
-  } else {
+  idx <- if (n_classes == 4) {
     c(1, 3, 5, 7)
+  } else {
+    c(1, 3, 5)
   }
-  fill_vals <- setNames(cols[idx], as.character(1:n_classes))
+  fill_vals <- c("0" = "white", setNames(cols[idx], as.character(1:n_classes)))
   p <- ggplot() + 
     geom_raster(data = raster_df, aes(x = x, y = y, fill = score)) +
     scale_fill_manual(

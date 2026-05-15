@@ -13,13 +13,13 @@ execute:
   warning: false
   message: false
 params:
-  species: "Dicentrarchus labrax"
+  species: "Clupea harengus"
   group: "fish"
   plot_limit: 200
   years_mask: 0.0
-  consistent_thr: 0.5
-  idp_value: 1
-  max_distance: 65000
+  consistent_thr: 0.5 # grid cells above 50% cumulative sum are considered core areas for a given year
+  idp_value: 1 # higher number corresponds to decreasing importance of distant points
+  max_distance: 65000 
 ---
 
 ```{r loading-packages}
@@ -124,9 +124,9 @@ plot_raster(core_area_q3, upper_limit = 100, plot_title = paste(params$species,"
 source(here("functions",
             "plot_consistent_core.R"))
 plot_consistent_core(core_area_q1, species = params$species, quarter = "1", shp= paste0(stringr::str_to_lower(params$species)%>%
-  stringr::str_replace(" ","_"),"_spawning_imr.shp"))
+  stringr::str_replace(" ","_"),"_q1_spawning_imr.shp"))
 plot_consistent_core(core_area_q3, species = params$species, quarter = "3",shp= paste0(stringr::str_to_lower(params$species)%>%
-  stringr::str_replace(" ","_"),"_spawning_imr.shp"))
+  stringr::str_replace(" ","_"),"_q3_spawning_imr.shp"))
 ```
 
 ```{r scoring}
@@ -135,11 +135,11 @@ source(here("functions",
 scoring_raster(core_area_q1, species = params$species,
                quarter = "1",
                shp= paste0(stringr::str_to_lower(params$species)%>%
-  stringr::str_replace(" ","_"),"_spawning_imr.shp"))
+  stringr::str_replace(" ","_"),"_q1_spawning_imr.shp"))
 scoring_raster(core_area_q3, species = params$species,
                quarter = "3",
                shp =paste0(stringr::str_to_lower(params$species)%>%
-  stringr::str_replace(" ","_"),"_spawning_imr.shp"))
+  stringr::str_replace(" ","_"),"_q3_spawning_imr.shp"))
 ```
 
 
