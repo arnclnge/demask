@@ -7,7 +7,7 @@
 #' @examples
 #' plot_raster(raster_cod_q1, upper_limit = 100)
 #' @export
-plot_consistent_core <- function(core_areas, species, quarter, shp){
+plot_consistent_core <- function(core_areas, species, quarter, shp, save_path){
   
   matter <- cmocean("matter")
   pal <- c("white", matter(9))
@@ -61,11 +61,13 @@ plot_consistent_core <- function(core_areas, species, quarter, shp){
       geom_sf(data = study_area %>%
                 st_transform(terra::crs(consistent_core)) %>%
                 st_union(), fill = NA) +
-      labs(title = "Consistent core areas", subtitle = paste0(species, " Q", quarter),
-           x = NULL, y = NULL)
+      labs(title = species, subtitle = paste0("Consistent core areas", " Q", quarter),
+           x = NULL, y = NULL)+
+      theme(plot.title = element_text(face = "italic"))
   }
 
-  
+  if (!is.null(save_path)) {
+    ggsave(filename = save_path, plot = p, width = 10, height = 6, dpi = 300)}
   
   return(p)
 }

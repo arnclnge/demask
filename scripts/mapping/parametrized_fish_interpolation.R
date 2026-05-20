@@ -15,6 +15,7 @@ years_mask = 0.0,
 consistent_thr = 0.5,
 idp_value = 1,
 max_distance = 65000)) #grid cells with less than 90% of data are NA
+
 quarto_render(
   input = file.path("scripts",
                     "mapping",
@@ -25,8 +26,8 @@ quarto_render(
                         plot_limit = 200,#Change this to change the maximum value plotted,
                         #Everything above this value gets the same value and color, for plot clarity reasons
                         years_mask = 0.0,
-                        consistent_thr = 0.5,
-                        idp_value = 2,
+                        consistent_thr = 0.8,
+                        idp_value = 1,
                         max_distance = 65000)) #grid cells with less than 90% of data are NA
 
 quarto_render(
@@ -50,8 +51,9 @@ quarto_render(
                         group = "fish",
                         plot_limit = 100,
                         years_mask = 0.90,
-                        consistent_thr = 0.5,
-                        idp_value = 2))
+                        consistent_thr = 0.8,
+                        idp_value = 1,
+                        max_distance = 65000))
 quarto_render(
   input = file.path("scripts",
                     "mapping",
@@ -73,8 +75,9 @@ quarto_render(
                         group = "fish",
                         plot_limit = 100,
                         years_mask = 0.70,
-                        consistent_thr =0.6,
-                        idp_value = 2)) #otherwise no grid cells in summer, summer2015&2016 no data
+                        consistent_thr =0.8,
+                        idp_value = 1,
+                        max_distance = 65000)) #otherwise no grid cells in summer, summer2015&2016 no data
 quarto_render(
   input = file.path("scripts",
                     "mapping",
@@ -96,8 +99,9 @@ quarto_render(
                         group = "fish",
                         plot_limit = 100,
                         years_mask = 0.90,
-                        consistent_thr = 0.6,
-                        idp_value = 2))
+                        consistent_thr = 0.8,
+                        idp_value = 1,
+                        max_distance = 65000))
 quarto_render(
   input = file.path("scripts",
                     "mapping",
@@ -119,5 +123,6 @@ quarto_render(
                         group = "fish",
                         plot_limit = 100,
                         years_mask = 0.90,
-                        consistent_thr = 0.6,
-                        idp_value = 2))
+                        consistent_thr = 0.8,
+                        idp_value = 1,
+                        max_distance = 65000))

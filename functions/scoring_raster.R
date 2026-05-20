@@ -1,4 +1,4 @@
-scoring_raster <- function(core_areas, species, quarter, shp = NULL){
+scoring_raster <- function(core_areas, species, quarter, shp = NULL, save_path){
   consistent_core <- app(core_areas, function(x) {
     if (all(is.na(x))) {NA_real_
     } else {
@@ -48,8 +48,12 @@ scoring_raster <- function(core_areas, species, quarter, shp = NULL){
     geom_sf(data = study_area %>%
               st_transform(terra::crs(consistent_core)) %>%
               st_union(), fill = NA) +
-    labs(title = "Consistent core areas", subtitle = paste0(species, " Q", quarter),
-         x = NULL, y = NULL)
+    labs(title = species, subtitle = paste0("Consistent core areas", " Q", quarter),
+         x = NULL, y = NULL)+
+    theme(plot.title = element_text(face = "italic"))
+  
+  if (!is.null(save_path)) {
+    ggsave(filename = save_path, plot = p, width = 10, height = 6, dpi = 300)}
   
   return(p)
 }
