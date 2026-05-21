@@ -1,0 +1,115 @@
+---
+title: "Test_threshold"
+author: "Jo-Hannes Nowé"
+format: html
+editor: visual
+---
+
+This script is to show how we make plots when we have the area that exceeds the chosen threshold value.
+
+```{r}
+library(sf)
+library(here)
+library(terra)
+library(ggplot2)
+```
+
+```{r}
+study_area <- st_read(here("data",
+                                "study_area",
+                                "20250912_10x10km_grid.shp"))
+r <- rast(x = terra::vect(study_area), resolution = 10000)
+v <- rasterize(study_area, r, field = runif(14400))
+plot(v)
+```
+
+Make the polygon that shows the area where the threshold was exceeded, can also be a raster first that we then turn into a vector layer.
+
+```{r}
+# create bbox
+bbox <- st_bbox(
+  c(
+    xmin = 3750000,
+    xmax = 4000000,
+    ymin = 3400000,
+    ymax = 3600000
+  ),
+  crs = st_crs(3035)
+)
+
+# convert bbox to polygon sf object
+rectangle <- st_as_sfc(bbox) |>
+  st_sf()
+
+# inspect
+ggplot(study_area)+
+  geom_sf()+
+  geom_sf(data = rectangle)
+```
+
+The rectangle is the area where the threshold was exceeded.
+
+Run the analysis_fish_interpolation.qmd for 'Gadus morhua' until you get to the last part so that you have the core area_q1 raster
+
+```{r}
+shp <- "gadus_morhua_spawning_imr.shp"
+scoring_raster(core_area_q1, species = params$species,
+               quarter = "1",
+               shp= paste0(stringr::str_to_lower(params$species)%>%
+  stringr::str_replace(" ","_"),"_spawning_imr.shp"))
+  consistent_core <- app(core_area_q1, function(x) sum(!is.na(x)))
+  # Make zero-count cells transparent
+  consistent_core[consistent_core == 0] <- NA
+  consistent_core[consistent_core == 1] <- 1
+  consistent_core[consistent_core %in% 2:3] <- 2
+  consistent_core[consistent_core %in% 4:7] <- 3
+  consistent_core[consistent_core %in% 8:10] <- 4
+  
+  if(is.null(shp) || !file.exists(here("data", "spawning", shp))){
+    n_classes <-4
+  print("No valid spawning shapefile was found.")
+  } else{
+    #Turn the spawning shapefile into a raster
+    spawning <- st_read(here("data", "spawning", shp), quiet = TRUE)
+    spawning <- st_transform(spawning, terra::crs(consistent_core))
+    spawning$spawning <- TRUE
+    spawning_raster <- terra::rasterize(terra::vect(spawning), consistent_core, field = "spawning", background = NA, touches = TRUE)
+    names(spawning_raster) <- "spawning"
+    consistent_core <- terra::mask(consistent_core,
+                                   mask = spawning_raster,
+                                   maskvalues = TRUE,
+                                   updatevalue = 5)
+    n_classes <- 5
+  }
+terra::plot(consistent_core)
+
+```
+
+Now we overlay the rectangle of the area with our consistent core scoring:
+
+I'll try to plot the raster a bit less clear and then within the rectangle highlight it by giving opacity = 1
+
+```{r}
+#ORIGINAL RASTER into df
+raster_df <- as.data.frame(consistent_core,xy=TRUE)%>%
+  dplyr::rename(score = lyr.1)%>%
+  dplyr::mutate(score = factor(score))
+
+#Mask the raster to only this spot
+masked_core <- terra::mask(consistent_core, rectangle)
+#turn into df
+masked_df <- as.data.frame(masked_core, xy = TRUE)%>%
+  dplyr::rename(score = lyr.1)%>%
+  dplyr::mutate(score = factor(score))
+
+ggplot(data = study_area) +
+    geom_raster(data = raster_df, aes(x = x, y = y, fill = score), alpha = 0.4)+
+  geom_sf(data = rectangle, fill = NA)+
+  geom_raster(data = masked_df, aes(x = x, y = y, fill = score), alpha = 1)
+  
+```
+
+```{r}
+ggplot(data = masked_df, aes(score))+
+  stat_count()
+```
