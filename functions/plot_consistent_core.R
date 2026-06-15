@@ -12,10 +12,18 @@ plot_consistent_core <- function(core_areas, species, quarter, shp, save_path){
   matter <- cmocean("matter")
   pal <- c("white", matter(9))
   
+  # extract years from layer names
+  years <- as.numeric(names(core_areas))
+  
+  #calculate weights
+  weights <- 1 - 0.10* (2025 - years)
+  
   consistent_core <- app(core_areas, function(x) {
     if (all(is.na(x))) {
       NA_real_
-    } else {sum(x == 1, na.rm = TRUE)}
+    } else {
+      sum((x == 1) * weights, na.rm = TRUE)
+    }
   })
   
   # Make zero-count cells transparent
