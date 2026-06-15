@@ -13,11 +13,11 @@ execute:
   warning: false
   message: false
 params:
-  species: "Clupea harengus"
+  species: "Gadus morhua"
   group: "fish"
-  plot_limit: 200
+  plot_limit: 100
   years_mask: 0.0
-  consistent_thr: 0.5 # grid cells above 50% cumulative sum are considered core areas for a given year
+  consistent_thr: 0.8 # grid cells above 50% cumulative sum are considered core areas for a given year
   idp_value: 1 # higher number corresponds to decreasing importance of distant points
   max_distance: 65000 
 ---
@@ -31,6 +31,7 @@ library(cmocean)
 library(ggplot2)
 library(here)
 library(gstat)
+library(patchwork)
 ```
 Parameters chosen for this run:
 ```{r}
@@ -102,6 +103,7 @@ plot_raster(raster_q3, upper_limit = params$plot_limit, plot_title = paste(param
 #to check values of each interpolated raster:
 # terra::plot(raster_q1[["2022"]])
 ```
+
 ```{r}
 source(here("functions",
                  "core_areas.R"))
@@ -148,15 +150,21 @@ plot_consistent_core(core_area_q3, species = params$species, quarter = "3",shp= 
 ```{r scoring}
 source(here("functions",
             "scoring_raster.R"))
-scoring_raster(core_area_q1, species = params$species,
+p1= scoring_raster(core_area_q1, species = params$species,
                quarter = "1",
                shp= paste0(stringr::str_to_lower(params$species)%>%
-  stringr::str_replace(" ","_"),"_q1_spawning_imr.shp"), save_path = here(paste0("outputs/png/scored_raster/", params$species,"_",threshold,"_q1_scored_raster.png")))
+  stringr::str_replace(" ","_"),"_q1_spawning_imr.shp"), plot_title =params$species, save_path = here(paste0("outputs/png/scored_raster/", params$species,"_",threshold,"_q1_scored_raster.png")))
 
-scoring_raster(core_area_q3, species = params$species,
+p3 = scoring_raster(core_area_q3, species = params$species,
                quarter = "3",
                shp =paste0(stringr::str_to_lower(params$species)%>%
   stringr::str_replace(" ","_"),"_q3_spawning_imr.shp"), save_path = here(paste0("outputs/png/scored_raster/", params$species,"_",threshold,"_q3_scored_raster.png")))
+
+source(here("functions",
+            "combine_plots.R"))
+
+combine_plots(species = params$species, save_path = here(paste0("outputs/png/scored_raster/", params$species,"_",threshold,"_scored_raster.png")))
+
 ```
 
 

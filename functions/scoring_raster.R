@@ -1,4 +1,4 @@
-scoring_raster <- function(core_areas, species, quarter, shp = NULL, save_path){
+scoring_raster <- function(core_areas, species, quarter, shp = NULL, plot_title = NULL, save_path=NULL){
   consistent_core <- app(core_areas, function(x) {
     if (all(is.na(x))) {NA_real_
     } else {
@@ -28,28 +28,46 @@ scoring_raster <- function(core_areas, species, quarter, shp = NULL, save_path){
   }
   
   # Plot the raster
-  raster_df <- as.data.frame(consistent_core, xy = TRUE) %>%
-    dplyr::select(score = lyr.1, x, y)%>%
-    dplyr::mutate(score = factor(score))
+  score_levels <- c("0", "1", "2", "3", "4")
+  
+  score_labels <- c(
+    "0" = "0",
+    "1" = "1-2 years",
+    "2" = "3-6 years",
+    "3" = "7-10 years",
+    "4" = "Spawning area")
+  
   matter <- cmocean("matter")
   cols <- matter(9)
-  idx <- if (n_classes == 4) {
-    c(1, 3, 5, 7)
-  } else {
-    c(1, 3, 5)
-  }
-  fill_vals <- c("0" = "white", setNames(cols[idx], as.character(1:n_classes)))
+  
+  fill_vals <- c(
+    "0" = "white",
+    "1" = cols[1],
+    "2" = cols[3],
+    "3" = cols[5],
+    "4" = cols[7])
+  
+  raster_df <- as.data.frame(consistent_core, xy = TRUE) %>%
+    dplyr::select(score = lyr.1, x, y) %>%
+    dplyr::mutate(score = factor(as.character(score), levels = score_levels))
+  
   p <- ggplot() + 
-    geom_raster(data = raster_df, aes(x = x, y = y, fill = score)) +
+    geom_raster(data = raster_df,aes(x = x, y = y, fill = score)) +
     scale_fill_manual(
       values = fill_vals,
-      na.value = "transparent"
-    ) +
-    geom_sf(data = study_area %>%
-              st_transform(terra::crs(consistent_core)) %>%
-              st_union(), fill = NA) +
-    labs(title = species, subtitle = paste0("Consistent core areas", " Q", quarter),
-         x = NULL, y = NULL)+
+      limits = score_levels,
+      breaks = score_levels,
+      labels = score_labels,
+      drop = FALSE,
+      na.value = "transparent", name = NULL) +
+    geom_sf(data = study_area %>% st_transform(terra::crs(consistent_core)) %>%
+        st_union(),
+      fill = NA) +
+    labs(
+      title = plot_title,
+      subtitle = paste0("Consistent core areas Q", quarter),
+      x = NULL,
+      y = NULL) +
     theme(plot.title = element_text(face = "italic"))
   
   if (!is.null(save_path)) {
@@ -57,3 +75,5 @@ scoring_raster <- function(core_areas, species, quarter, shp = NULL, save_path){
   
   return(p)
 }
+
+

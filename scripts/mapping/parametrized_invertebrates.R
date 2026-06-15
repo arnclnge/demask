@@ -1,5 +1,15 @@
 library(quarto)
 
+#Emodnet seabed classes 
+
+# ID                 Folk_5cl_t
+# 0       1. Mud to muddy Sand
+# 1                    2. Sand
+# 2 3. Coarse-grained sediment
+# 3          4. Mixed sediment
+# 4         5. Rock & boulders
+# 5   6. No data at this level
+
 
 # invertebrates --------------------------------------------------------------------
 #Norwegian lobster
@@ -12,7 +22,8 @@ quarto_render(
                         temp_max = 17,
                         so_min = 29,
                         depth_min = 15,
-                        depth_max = 800))
+                        depth_max = 800,
+                        seabed_class = 0))
 
 quarto_render(
   input = file.path("scripts", "mapping",
@@ -23,7 +34,8 @@ quarto_render(
                         temp_max = 29,
                         so_min = 0,
                         depth_min = 0,
-                        depth_max = 50))
+                        depth_max = 50,
+                        seabed_class =  c(3,4)))
 quarto_render(
   input = file.path("scripts","mapping",
                     "analysis_invertebrates.qmd"),
@@ -34,7 +46,8 @@ quarto_render(
                         so_min = 18,
                         so_max= 40,
                         depth_min = 0,
-                        depth_max = 50))
+                        depth_max = 50),
+                        seabed_class =  c(1,2))
 
 quarto_render(
   input = file.path("scripts","mapping",
@@ -45,7 +58,8 @@ quarto_render(
                         temp_max = 22,
                         so_min = 0,
                         depth_min = 0,
-                        depth_max = 50))
+                        depth_max = 50,
+                        seabed_class = 4))
 
 quarto_render(
   input = file.path("scripts","mapping",
@@ -56,4 +70,5 @@ quarto_render(
                         temp_max = 21,
                         so_min = 0,
                         depth_min = 0,
-                        depth_max = 150))
+                        depth_max = 150,
+                        seabed_class = c(2,4))

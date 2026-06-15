@@ -20,6 +20,7 @@ params:
   so_max: .inf
   depth_min: 15
   depth_max: 800
+  seabed_class: 0
 ---
 
 ```{r}
@@ -29,6 +30,7 @@ library(terra)
 library(eunis.habitats)
 library(dplyr)
 library(arrow)
+library(withr)
 ```
 
 ```{r}
@@ -40,6 +42,7 @@ print(paste("so_min:",params$so_min))
 print(paste("so_max:",params$so_max))
 print(paste("depth_min:",params$depth_min))
 print(paste("depth_max:",params$depth_max))
+print(paste("seabed_class:",params$seabed_class))
 ```
 
 
@@ -60,53 +63,46 @@ source(here("scripts","mapping","download_environmental_layers.R"))
 
 ```{r}
 #Resampling the downloaded environmental layers to the desired resolution
-q1_so_resampled <- project(
-  q1_so,
-  v,
-  method = "bilinear"
-)
 
-q1_thetao_resampled <- project(
-  q1_thetao,
-  v,
-  method = "bilinear"
-)
-q1_bottomT_resampled <- project(
-  q1_bottomT,
-  v,
-  method = "bilinear"
-)
+q1_so_resampled <- project(q1_so, v, method = "bilinear")
+q1_thetao_resampled <- project(q1_thetao, v, method = "bilinear")
+q1_bottomT_resampled <- project(q1_bottomT, v, method = "bilinear")
+  
+q3_so_resampled <- project(q3_so, v, method = "bilinear")
+q3_thetao_resampled <- project(q3_thetao, v, method = "bilinear")
+q3_bottomT_resampled <- project(q3_bottomT, v, method = "bilinear")
+  
+bottom_sal_resampled <- project(bottom_sal, v, method = "bilinear")
+bathy_resampled <- project(bathy, v, method = "bilinear")
 
-q3_so_resampled <- project(
-  q3_so,
-  v,
-  method = "bilinear"
-)
-
-q3_thetao_resampled <- project(
-  q3_thetao,
-  v,
-  method = "bilinear"
-)
-q3_bottomT_resampled <- project(
-  q3_bottomT,
-  v,
-  method = "bilinear"
-)
-
-bottom_sal_resampled <- project(
-  bottom_sal,
-  v,
-  method = "bilinear"
-)
-
-bathy_resampled <- project(
-  bathy,
-  v,
-  method = "bilinear"
-)
 ```
 
+```{r}
+#EMODNET seabed raster 
+
+# Path to the saved seabed raster
+seabed_dir <- here("data", "environmental_data", "seabed_raster.RData")
+
+# Load substrate shapefile
+substrate <- vect(here("data", "environmental_data", "emodnet_northsea_substrate.shp"))
+
+# Make sure template raster 'r' exists
+# Reproject substrate vector to match raster CRS
+emodnet_proj <- project(substrate, crs(r))
+
+# Rasterize substrate polygons to template raster
+seabed_raster <- rasterize(
+  emodnet_proj,
+  r,
+  field = "Folk_5cl_t", #name of field where classification of seabed is specified 
+  touches = TRUE,
+  background = NA
+)
+
+terra::plot(seabed_raster)
+unique(values(seabed_raster))
+summary(seabed_raster)
+```
 
 
 
@@ -153,6 +149,9 @@ terra::plot(bathy_mask, , main = "Within bathymetry range", col = c("brown", "ye
 
 
 ```{r}
+#| output: false
+#| eval: false
+
 #Based on The categories of habitat
 # https://erddap.emodnet.eu/erddap/info/biology_8777_429f_a47a_d420/index.html
 ids <- 1:161
@@ -194,7 +193,10 @@ keep_habs <- df[code%in%habs$EUNIS2019C,]
 keep_ids <- keep_habs$ID
 ```
 
+
 ```{r}
+#| output: false
+#| eval: false
 habitats_mask <- terra::ifel(
   is.na(habitats_rast),
   NA,
@@ -206,6 +208,25 @@ levels(habitats_mask) <- data.frame(
 )
 plot(habitats_mask, main= "suitable EUNIS habitat",col = c("brown", "yellow"))
 ```
+
+```{r}
+#Use emodnet habitats layer
+
+# Create a binary mask where TRUE = selected classes
+habitats_mask <- seabed_raster == seabed_class
+
+# Optional: set factor levels for plotting
+levels(habitats_mask) <- data.frame(
+  value = c(0, 1),
+  label = c("False", "True")
+)
+
+# Plot the mask
+plot(habitats_mask,
+     main = "Suitable EMODnet habitats",
+     col = c("brown", "yellow"))
+```
+
 ```{r}
 rasters_winter <- c(habitats_mask, bathy_mask, bottomthermal_mask_winter, q1_so_mask)
 terra::plot(terra::app(rasters_winter, sum), main = "amount of positive conditions in winter")
