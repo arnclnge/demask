@@ -213,7 +213,7 @@ plot(habitats_mask, main= "suitable EUNIS habitat",col = c("brown", "yellow"))
 #Use emodnet habitats layer
 
 # Create a binary mask where TRUE = selected classes
-habitats_mask <- seabed_raster == seabed_class
+habitats_mask <- seabed_raster %in% params$seabed_class
 
 # Optional: set factor levels for plotting
 levels(habitats_mask) <- data.frame(

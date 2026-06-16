@@ -46,8 +46,8 @@ quarto_render(
                         so_min = 18,
                         so_max= 40,
                         depth_min = 0,
-                        depth_max = 50),
-                        seabed_class =  c(1,2))
+                        depth_max = 50,
+                        seabed_class =  c(1,2)))
 
 quarto_render(
   input = file.path("scripts","mapping",
@@ -71,4 +71,4 @@ quarto_render(
                         so_min = 0,
                         depth_min = 0,
                         depth_max = 150,
-                        seabed_class = c(2,4))
+                        seabed_class = c(2,4)))
