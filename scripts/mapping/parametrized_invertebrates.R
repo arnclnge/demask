@@ -16,20 +16,20 @@ library(quarto)
 quarto_render(
   input = file.path("scripts","mapping",
                     "analysis_invertebrates.qmd"),
-  output_file = file.path("masks_norwegianlobster.html"),
+  #output_file = file.path("masks_norwegianlobster.html"),
   execute_params = list(species = "Nephrops norvegicus",
                         temp_min = 6,
                         temp_max = 17,
                         so_min = 29,
                         depth_min = 15,
                         depth_max = 800,
-                        seabed_class = 0))
+                        seabed_class = c(0)))
 
 quarto_render(
   input = file.path("scripts", "mapping",
                     "analysis_invertebrates.qmd"),
-  output_file = file.path("masks_bluemussel.html"),
-  execute_params = list(species = "Mytilus edulis",
+  #output_file = file.path("masks_bluemussel.html"),
+  execute_params = list(species = "Mytilus edulis", #This will return an error as there are not enough ICES data points (only 11 data points)
                         temp_min = 0,
                         temp_max = 29,
                         so_min = 0,
@@ -39,7 +39,7 @@ quarto_render(
 quarto_render(
   input = file.path("scripts","mapping",
                     "analysis_invertebrates.qmd"),
-  output_file = file.path("masks_cuttlefish.html"),
+  #output_file = file.path("masks_cuttlefish.html"),
   execute_params = list(species = "Sepia officinalis",
                         temp_min = 7,
                         temp_max = 30,
@@ -52,7 +52,7 @@ quarto_render(
 quarto_render(
   input = file.path("scripts","mapping",
                     "analysis_invertebrates.qmd"),
-  output_file = file.path("masks_europeanlobster.html"),
+  #output_file = file.path("masks_europeanlobster.html"),
   execute_params = list(species = "Homarus gammarus",
                         temp_min = 5,
                         temp_max = 22,
@@ -64,7 +64,7 @@ quarto_render(
 quarto_render(
   input = file.path("scripts","mapping",
                     "analysis_invertebrates.qmd"),
-  output_file = file.path("masks_scallop.html"),
+  #output_file = file.path("masks_scallop.html"),
   execute_params = list(species = "Pecten maximus",
                         temp_min = 9,
                         temp_max = 21,

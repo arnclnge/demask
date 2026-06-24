@@ -75,7 +75,8 @@ plot_consistent_core <- function(core_areas, species, quarter, shp, save_path){
   }
 
   if (!is.null(save_path)) {
-    ggsave(filename = save_path, plot = p, width = 10, height = 6, dpi = 300)}
+    ggsave(filename = save_path, plot = p, width = 10, height = 6, dpi = 300)
+    saveRDS(raster_df, file = here("outputs", "df", paste0(species,"_",threshold,"_",quarter, "_consistent_core_areas_yearly.rds")))}
   
   return(p)
 }
