@@ -16,7 +16,7 @@ plot_consistent_core <- function(core_areas, species, quarter, shp, save_path){
   years <- as.numeric(names(core_areas))
   
   #calculate weights
-  weights <- 1 - 0.10* (2025 - years)
+  weights <- 1 - 0.10* (2024 - years)
   
   consistent_core <- app(core_areas, function(x) {
     if (all(is.na(x))) {
@@ -37,7 +37,7 @@ plot_consistent_core <- function(core_areas, species, quarter, shp, save_path){
 
     p <- ggplot() + 
       geom_raster(data = raster_df, aes(x = x, y = y, fill = years)) +
-      scale_fill_gradientn(name = "Years", colours = pal, na.value = "transparent", limits = c(0, 10), breaks = seq(0, 10, by = 2)) +
+      scale_fill_gradientn(name = "Years", colours = pal, na.value = "transparent", limits = c(0, sum(weights, na.rm = TRUE))) +
       geom_sf(data = study_area %>%
                 st_transform(terra::crs(consistent_core)) %>%
                 st_union(), fill = NA) +
@@ -62,7 +62,7 @@ plot_consistent_core <- function(core_areas, species, quarter, shp, save_path){
     
     p <- ggplot() + 
       geom_raster(data = raster_df, aes(x = x, y = y, fill = years)) +
-      scale_fill_gradientn(name = "Years", colours = pal, na.value = "transparent", limits = c(0, 10), breaks = seq(0, 10, by = 2)) +
+      scale_fill_gradientn(name = "Years", colours = pal, na.value = "transparent", limits = c(0, sum(weights, na.rm = TRUE))) +
       ggnewscale::new_scale_fill() +
       geom_raster(data = spawning_df, aes(x = x, y = y, fill = "Spawning area"), alpha = 0.35) +
       scale_fill_manual(name = NULL, values = c("Spawning area" = "red")) +

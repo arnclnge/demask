@@ -1,4 +1,4 @@
-scoring_raster <- function(core_areas, species, quarter, shp = NULL, plot_title = NULL, save_path=NULL){
+plot_weighted <- function(core_areas, species, quarter, shp = NULL, plot_title = NULL, save_path=NULL){
   
   # extract years from layer names
   years <- as.numeric(names(core_areas))
@@ -14,11 +14,6 @@ scoring_raster <- function(core_areas, species, quarter, shp = NULL, plot_title 
     }
   })
   
-  # Make zero-count cells transparent
-  consistent_core[consistent_core == 0] <- 0
-  consistent_core[consistent_core %in% 1:2] <- 1
-  consistent_core[consistent_core %in% 3:6] <- 2
-  consistent_core[consistent_core %in% 7:10] <- 3
   
   if(is.null(shp) || !file.exists(here("data", "spawning", shp))){
     n_classes <-4
@@ -33,43 +28,24 @@ scoring_raster <- function(core_areas, species, quarter, shp = NULL, plot_title 
     consistent_core <- terra::mask(consistent_core,
                                    mask = spawning_raster,
                                    maskvalues = TRUE,
-                                   updatevalue = 4)
-    n_classes <- 4
+                                   updatevalue = 6)
   }
   
   # Plot the raster
-  score_levels <- c("0", "1", "2", "3", "4")
-  
-  score_labels <- c(
-    "0" = "0",
-    "1" = "1-2 years",
-    "2" = "3-6 years",
-    "3" = "7-10 years",
-    "4" = "Spawning area")
-  
   matter <- cmocean("matter")
   cols <- matter(9)
   
-  fill_vals <- c(
-    "0" = "white",
-    "1" = cols[1],
-    "2" = cols[3],
-    "3" = cols[5],
-    "4" = cols[7])
-  
   raster_df <- as.data.frame(consistent_core, xy = TRUE) %>%
-    dplyr::select(score = lyr.1, x, y) %>%
-    dplyr::mutate(score = factor(as.character(score), levels = score_levels))
+    dplyr::select(score = lyr.1, x, y) 
   
   p <- ggplot() + 
     geom_raster(data = raster_df,aes(x = x, y = y, fill = score)) +
-    scale_fill_manual(
-      values = fill_vals,
-      limits = score_levels,
-      breaks = score_levels,
-      labels = score_labels,
-      drop = FALSE,
-      na.value = "transparent", name = NULL) +
+    scale_fill_gradientn(
+      name = "Score",
+      colours = c("white", matter(9)),
+      na.value = "transparent",
+      limits = c(0, max(raster_df$score, na.rm = TRUE)),
+      breaks = pretty(raster_df$score)) +
     geom_sf(data = study_area %>% st_transform(terra::crs(consistent_core)) %>%
         st_union(),
       fill = NA) +
