@@ -1,0 +1,434 @@
+---
+title: "risk_mapping"
+author: "Arienne Calonge"
+format: html
+editor: visual
+params:
+  species: "Gadus morhua"
+---
+
+## Risk mapping
+
+Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
+
+## Read rasters
+
+When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
+
+```{r}
+library(terra)
+library(here)
+
+
+# Load habitat TIFF files
+tiff_files <- list.files(here("outputs", "raster", "fish_weighted"),
+                         full.names = TRUE)
+
+# Load the first file
+tiff_r <- rast(tiff_files[1])
+crs(tiff_r)
+
+# Read NetCDF file - noise raster
+noise_r <- rast(here("data", "noise_raster", "jomopans_2022", "jomopans_finegrid_nonLinearAbs_2022_date01-2020.nc4"))
+
+# View information
+print(noise_r)
+names(noise_r)
+crs(noise_r)
+
+# Plot first layer
+plot(noise_r[[2]])
+plot(tiff_r)
+
+# Reproject and align to TIFF
+noise_aligned <- project(
+  noise_r,
+  crs(tiff_r),
+  method = "bilinear"
+)
+
+# Plot aligned raster
+plot(noise_aligned)
+
+```
+
+Reproject and reorient the noise maps.
+
+```{r}
+
+# Copy original raster
+noise_fixed <- noise_r
+
+# Swap x and y coordinates by transposing the raster
+noise_fixed <- t(noise_fixed)
+
+# Assign correct geographical extent
+ext(noise_fixed) <- ext(
+  -5.225, 13.225,
+  50.8875, 62.1125)
+
+# Set coordinate system
+crs(noise_fixed) <- "OGC:CRS84"
+
+# Plot corrected raster
+plot(noise_fixed[[2]])
+
+# Flip the corrected noise raster vertically
+noise_corrected <- flip(noise_fixed, direction = "vertical")
+
+# Check orientation
+plot(
+  noise_corrected[[2]],
+  col = hcl.colors(100, "YlOrRd"),
+  main = "Noise raster - corrected orientation"
+)
+
+#Reproject to match TIFF
+noise_aligned <- project(
+  noise_corrected,
+  tiff_r,
+  method = "bilinear"
+)
+
+plot(
+  noise_aligned[[2]],
+  col = hcl.colors(100, "YlOrRd")
+)
+```
+
+Overlay noise and species core area maps.
+
+```{r}
+
+plot(
+  tiff_r[[1]],
+  main = "Species core areas + Noise overlay"
+)
+
+plot(
+  noise_aligned[[1]],
+  add = TRUE,
+  col = hcl.colors(100, "YlOrRd"),
+  alpha = 0.5,
+  legend = FALSE
+)
+```
+
+## Risk matrix
+
+- **Species core area:** 1–6, where 6 = spawning area.
+
+- **Noise level:** 1–5, where 5 = critical noise.
+
+![](images/clipboard-966646609.png)
+
+```{r}
+# Classify original noise raster
+noise_class <- classify(
+  noise_aligned[[2]],
+  rcl = matrix(c(
+    -Inf, 80, 1,
+    80, 90, 2,
+    90, 100, 3,
+    100, 110, 4,
+    110, Inf, 5
+  ), ncol = 3, byrow = TRUE),
+  right = FALSE
+)
+
+# Five discrete colours
+noise_colors <- c(
+  "#39E75F",  # 1 - Very low
+  "#A3EF49",  # 2 - Acceptable
+  "#F5E64B",  # 3 - Concerning
+  "#F5A04B",  # 4 - Severe
+  "#F24B4B"   # 5 - Critical
+)
+
+# Create two panels, with more space for the legend
+layout(
+  matrix(c(1, 2), nrow = 1),
+  widths = c(3, 2)
+)
+
+# Plot noise raster
+par(mar = c(4, 4, 3, 1))
+
+terra::plot(
+  noise_class,
+  col = noise_colors,
+  breaks = seq(0.5, 5.5, by = 1),
+  maxcell = ncell(noise_class),
+  main = "Noise categories",
+  legend = FALSE
+)
+
+# Legend panel
+par(mar = c(0, 0, 0, 0))
+
+plot.new()
+plot.window(xlim = c(0, 1), ylim = c(0, 1))
+
+graphics::legend(
+  x = 0.05,
+  y = 0.7,
+  legend = c(
+    "< 80 dB",
+    "80–<90 dB",
+    "90–<100 dB",
+    "100–<110 dB",
+    "≥ 110 dB"
+  ),
+  fill = noise_colors,
+  title = "Noise level (dB)",
+  bty = "n",
+  cex = 0.9,
+  xjust = 0,
+  yjust = 1
+)
+# Reset plotting layout
+layout(1)
+```
+
+Create the risk color matrix and combine the two rasters.
+
+```{r}
+
+library(rnaturalearth)
+library(rnaturalearthhires)
+library(sf)
+
+risk_colors <- matrix(c(
+  "#3CF24F", "#60EF44", "#86ED41", "#A8F044", "#C7EF4B", "#E8EF4E",
+  "#6BF148", "#91EF47", "#B6ED4C", "#D9EF50", "#F3F04E", "#F5D453",
+  "#9BED4C", "#C5ED4F", "#DCED50", "#F2E74D", "#F2C454", "#F3A45A",
+  "#C9F04C", "#EFF04F", "#F4D951", "#F3BC55", "#F39A55", "#F47B55",
+  "#F1EF50", "#F5D552", "#F3B255", "#F58D51", "#F56D51", "#F34E50"
+), nrow = 5, byrow = TRUE)
+
+# Species raster
+species <- tiff_r[[1]]
+
+# Classify species core areas
+species_class <- classify(
+  species,
+  rcl = matrix(c(
+    0, 1, 1,
+    1, 2, 2,
+    2, 3, 3,
+    3, 4, 4,
+    4, 5, 5,
+    5, 6, 6
+  ), ncol = 3, byrow = TRUE),
+  right = TRUE
+)
+
+# Preserve original category 0 and spawning area 6
+species_class <- ifel(species == 0, 0, species_class)
+species_class <- ifel(species == 6, 6, species_class)
+
+# Check both rasters use the same grid
+compareGeom(species_class, noise_class)
+
+plot(
+  species_class,
+  col = hcl.colors(6, "Viridis"),
+  breaks = seq(0.5, 6.5, by = 1),
+  main = "Atlantic herring - winter core areas"
+)
+
+# Calculate combined risk code
+combined_risk <- (noise_class - 1) * 6 + species_class
+
+# Keep only valid classified cells
+combined_risk <- ifel(
+  species_class == 0,0, combined_risk)
+
+combined_risk <- ifel(
+  species_class == 0 |
+    (species_class %in% 1:6 & noise_class %in% 1:5),combined_risk,NA)
+
+names(combined_risk) <- "Noise-habitat risk"
+
+# Original risk matrix colours
+risk_palette <- as.vector(t(risk_colors))
+
+# Add light grey for species class 0
+risk_palette <- c("#D9D9D9",risk_palette)
+
+# Get country boundaries
+countries <- ne_countries(scale = 10,returnclass = "sv")
+
+# Reproject countries to match TIFF
+countries <- project(countries,crs(tiff_r))
+
+# Crop to your study area, with some surrounding land
+map_extent <- extend(ext(tiff_r), 150000)
+
+countries_northsea <- crop(countries,map_extent)
+
+# Plot combined raster
+plot(combined_risk,
+  col = risk_palette,
+  breaks = seq(-0.5, 30.5, by = 1),
+  maxcell = ncell(combined_risk),
+  legend = FALSE,
+  ext = map_extent,
+  main = "Atlantic herring - winter noise-habitat risk")
+
+# Add country borders and coastline
+plot(countries_northsea,
+  add = TRUE,
+  col = NA,
+  border = "black",
+  lwd = 0.8)
+```
+
+Add legend to the map
+
+```{r}
+# Reset plotting layout
+layout(1)
+
+# Colours
+risk_palette <- c(
+  "#D9D9D9",
+  as.vector(t(risk_colors)))
+
+# Map extent
+map_extent <- extend(ext(tiff_r), 150000)
+
+# Reserve space for title and legend
+par(mar = c(4, 4, 4, 2))
+
+# 1. Plot land
+plot(
+  countries_northsea,
+  col = "#EFEFEF",
+  border = NA,
+  ext = map_extent,
+  main = "",
+  axes = TRUE)
+
+# 2. Add combined risk raster
+plot(
+  combined_risk,
+  add = TRUE,
+  col = risk_palette,
+  breaks = seq(-0.5, 30.5, by = 1),
+  maxcell = ncell(combined_risk),
+  legend = FALSE
+)
+
+# 3. Add country borders
+plot(
+  countries_northsea,
+  add = TRUE,
+  col = NA,
+  border = "#333333",
+  lwd = 0.6
+)
+
+# 4. Add title
+title(
+  main = "",
+  cex.main = 1.1,
+  line = 2
+)
+
+# 5. Get map coordinates
+usr <- par("usr")
+
+xrange <- diff(usr[1:2])
+yrange <- diff(usr[3:4])
+
+# 6. Position legend INSIDE plotting coordinates
+x_left  <- usr[2] - 0.18 * xrange
+x_right <- usr[2] - 0.13 * xrange
+
+y_bottom <- usr[3] + 0.25 * yrange
+y_top    <- usr[3] + 0.75 * yrange
+
+# 7. Gradient colours
+gradient_colors <- colorRampPalette(c(
+  "#3CF24F",
+  "#A8F044",
+  "#F1EF50",
+  "#F3A45A",
+  "#F34E50"
+))(100)
+
+# 8. Draw colour bar
+y_breaks <- seq(y_bottom, y_top, length.out = 101)
+
+for (i in 1:100) {
+  rect(
+    x_left,
+    y_breaks[i],
+    x_right,
+    y_breaks[i + 1],
+    col = gradient_colors[i],
+    border = NA
+  )
+}
+
+# Colour bar outline
+rect(
+  x_left, y_bottom,
+  x_right, y_top,
+  border = "black"
+)
+
+# Legend title
+text(
+  x_left,
+  y_top + 0.05 * yrange,
+  "Risk level",
+  adj = 0,
+  font = 2,
+  cex = 0.9
+)
+
+# Labels
+text(
+  x_right + 0.02 * xrange,
+  y_top,
+  "High risk",
+  adj = 0,
+  cex = 0.8
+)
+
+text(
+  x_right + 0.02 * xrange,
+  y_bottom,
+  "Low risk",
+  adj = 0,
+  cex = 0.8
+)
+
+# GREY LEGEND: NO SPECIES CORE AREA
+# ---------------------------------
+
+# Position grey box below the colour bar
+grey_bottom <- y_bottom - 0.12 * yrange
+grey_top    <- y_bottom - 0.08 * yrange
+
+# Draw grey box
+rect(
+  xleft = x_left,
+  ybottom = grey_bottom,
+  xright = x_right,
+  ytop = grey_top,
+  col = "#D9D9D9",
+  border = "black"
+)
+
+# Add label
+text(
+  x = x_right + 0.02 * xrange,
+  y = (grey_bottom + grey_top) / 2,
+  labels = "Not identified\nas a species\ncore area",
+  adj = c(0, 0.5),
+  cex = 0.65,
+  xpd = NA)
+```

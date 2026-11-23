@@ -4,7 +4,7 @@ scoring_raster <- function(core_areas, species, quarter, shp = NULL, plot_title 
   years <- as.numeric(names(core_areas))
   
   #calculate weights
-  weights <- 1 - 0.10* (2024 - years)
+  weights <- 1 
   
   consistent_core <- app(core_areas, function(x) {
     if (all(is.na(x))) {

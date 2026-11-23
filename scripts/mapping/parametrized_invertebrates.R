@@ -15,10 +15,10 @@ library(quarto)
 #Norwegian lobster
 quarto_render(
   input = file.path("scripts","mapping",
-                    "analysis_invertebrates.qmd"),
-  #output_file = file.path("masks_norwegianlobster.html"),
+                    "analysis_invertebrates_environmental_layers.qmd"),
+  output_file = file.path("masks_norwegianlobster.html"),
   execute_params = list(species = "Nephrops norvegicus",
-                        temp_min = 6,
+                        temp_min = 0,
                         temp_max = 17,
                         so_min = 29,
                         depth_min = 15,
@@ -27,48 +27,47 @@ quarto_render(
 
 quarto_render(
   input = file.path("scripts", "mapping",
-                    "analysis_invertebrates.qmd"),
-  #output_file = file.path("masks_bluemussel.html"),
+                    "analysis_invertebrates_environmental_layers.qmd"),
+  output_file = file.path("masks_bluemussel.html"),
   execute_params = list(species = "Mytilus edulis", #This will return an error as there are not enough ICES data points (only 11 data points)
                         temp_min = 0,
                         temp_max = 29,
                         so_min = 0,
                         depth_min = 0,
                         depth_max = 50,
-                        seabed_class =  c(3,4)))
+                        seabed_class =  c(1,2,3,4)))
 quarto_render(
   input = file.path("scripts","mapping",
-                    "analysis_invertebrates.qmd"),
-  #output_file = file.path("masks_cuttlefish.html"),
+                    "analysis_invertebrates_environmental_layers.qmd"),
+  output_file = file.path("masks_cuttlefish_winter.html"),
   execute_params = list(species = "Sepia officinalis",
                         temp_min = 7,
                         temp_max = 30,
-                        so_min = 18,
-                        so_max= 40,
+                        so_min = 0,
                         depth_min = 0,
-                        depth_max = 50,
-                        seabed_class =  c(1,2)))
+                        depth_max = 200, #max 50 during spring-summer, max 200 during autumn-winter
+                        seabed_class =  c(0,1,3)))
 
 quarto_render(
   input = file.path("scripts","mapping",
-                    "analysis_invertebrates.qmd"),
-  #output_file = file.path("masks_europeanlobster.html"),
+                    "analysis_invertebrates_environmental_layers.qmd"),
+  output_file = file.path("masks_europeanlobster.html"),
   execute_params = list(species = "Homarus gammarus",
-                        temp_min = 5,
+                        temp_min = 0,
                         temp_max = 22,
                         so_min = 0,
                         depth_min = 0,
                         depth_max = 50,
-                        seabed_class = 4))
+                        seabed_class = c(2,3,4)))
 
 quarto_render(
   input = file.path("scripts","mapping",
-                    "analysis_invertebrates.qmd"),
-  #output_file = file.path("masks_scallop.html"),
+                    "analysis_invertebrates_environmental_layers.qmd"),
+  output_file = file.path("masks_scallop.html"),
   execute_params = list(species = "Pecten maximus",
-                        temp_min = 9,
+                        temp_min = 7,
                         temp_max = 21,
-                        so_min = 0,
+                        so_min = 26,
                         depth_min = 0,
                         depth_max = 150,
-                        seabed_class = c(2,4)))
+                        seabed_class = c(1,2,3)))

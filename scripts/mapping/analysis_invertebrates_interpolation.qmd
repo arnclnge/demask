@@ -13,7 +13,7 @@ execute:
   warning: false
   message: false
 params:
-  species: "Sepia officinalis"
+  species: "Nephrops norvegicus"
   group: "invertebrates"
   plot_limit: 100
   years_mask: 0.0

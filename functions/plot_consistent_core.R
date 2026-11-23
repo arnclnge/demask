@@ -26,6 +26,12 @@ plot_consistent_core <- function(core_areas, species, quarter, shp, save_path){
     }
   })
   
+  consistent_core_shp <- terra::as.polygons(
+    consistent_core,
+    dissolve = TRUE,
+    na.rm = TRUE
+  )
+  
   # Make zero-count cells transparent
   #consistent_core[consistent_core == 0] <- NA
   
@@ -77,7 +83,12 @@ plot_consistent_core <- function(core_areas, species, quarter, shp, save_path){
   if (!is.null(save_path)) {
     ggsave(filename = save_path, plot = p, width = 10, height = 6, dpi = 300)
     saveRDS(raster_df, file = here("outputs", "df", paste0(species,"_",threshold,"_",quarter, "_consistent_core_areas_yearly.rds")))}
-  
+    #save consistent core as shpfile
+    terra::writeVector(
+      consistent_core_shp,
+      here("outputs","shp","fish_consistent_core",
+        paste0(stringr::str_to_lower(species) %>% stringr::str_replace_all(" ", "_"),
+          "_", threshold, "_q", quarter, "_consistent_core.shp")),overwrite = TRUE)
   return(p)
 }
 

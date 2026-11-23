@@ -1,4 +1,4 @@
-plot_weighted <- function(core_areas, species, quarter, shp = NULL, plot_title = NULL, save_path=NULL){
+plot_weighted <- function(core_areas, species, quarter, shp = NULL, plot_title = NULL, save_path=NULL, raster = NULL){
   
   # extract years from layer names
   years <- as.numeric(names(core_areas))
@@ -59,6 +59,15 @@ plot_weighted <- function(core_areas, species, quarter, shp = NULL, plot_title =
   if (!is.null(save_path)) {
     ggsave(filename = save_path, plot = p, width = 10, height = 6, dpi = 300)}
   
+  #Save Raster file 
+  if (!is.null(raster)) {
+    terra::writeRaster(
+      consistent_core,
+      filename = raster,
+      filetype = "GTiff",
+      overwrite = TRUE
+    )
+  }
   return(p)
 }
 

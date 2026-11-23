@@ -16,7 +16,7 @@ params:
   species: "Gadus morhua"
   group: "fish"
   plot_limit: 100
-  years_mask: 0.0
+  years_mask: 0.0 # percentage of years we need data in, if there's less then that grid cell is excluded in the analysis
   consistent_thr: 0.8 # grid cells above 50% cumulative sum are considered core areas for a given year
   idp_value: 1 # higher number corresponds to decreasing importance of distant points
   max_distance: 65000 
@@ -166,5 +166,29 @@ source(here("functions",
 combine_plots(species = params$species, save_path = here(paste0("outputs/png/scored_raster/", params$species,"_",threshold,"_scored_raster.png")))
 
 ```
+
+```{r, weighted core areas (recent years)}
+
+source(here("functions",
+            "plot_weighted.R"))
+p1= plot_weighted(core_area_q1, species = params$species,
+               quarter = "1",
+               shp= paste0(stringr::str_to_lower(params$species)%>%
+  stringr::str_replace(" ","_"),"_q1_spawning_imr.shp"), plot_title =params$species,
+  raster = here(paste0("outputs/raster/fish_weighted/", params$species,"_q1",threshold,"_weighted_raster.tif")))
+
+p3 = plot_weighted(core_area_q3, species = params$species,
+               quarter = "3",
+               shp =paste0(stringr::str_to_lower(params$species)%>%
+  stringr::str_replace(" ","_"),"_q3_spawning_imr.shp"),
+  raster = here(paste0("outputs/raster/fish_weighted/", params$species,"_q3",threshold,"_weighted_raster.tif")))
+
+source(here("functions",
+            "combine_plots.R"))
+
+combine_plots(species = params$species, save_path = here(paste0("outputs/png/weighted_raster/", params$species,"_",threshold,"_weighted_raster.png")))
+
+```
+
 
 
